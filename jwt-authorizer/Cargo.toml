@@ -1,0 +1,33 @@
+[package]
+name = "jwt-authorizer"
+description = "jwt authorizer middleware for axum"
+version = "0.2.0"
+edition = "2021"
+authors = ["cduvray <c_duvray@proton.me>"]
+license = "MIT"
+readme = "docs/README.md"
+repository = "https://github.com/cduvray/jwt-authorizer"
+keywords = ["jwt","axum","authorisation"]
+
+[dependencies]
+axum = { version = "0.6.1", features = ["headers"] }
+futures-util = "0.3.25"
+futures-core = "0.3.25"
+headers = "0.3"
+jsonwebtoken = "8.2.0"
+http = "0.2.8"
+# pin-project-lite = "0.2.9"
+pin-project = "1.0.12"
+reqwest = { version = "0.11.13", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0.37"
+tokio = { version = "1.0", features = ["full"] }
+tower-http = { version = "0.3.4", features = ["trace", "auth"] }
+tower-layer = "0.3"
+tower-service = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+wiremock = "0.5"

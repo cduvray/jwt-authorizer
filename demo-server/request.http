@@ -1,0 +1,35 @@
+###
+POST http://localhost:3000/oidc/authorize
+Content-Type: application/json
+
+{"client_id":"foo","client_secret":"bar"}
+
+### Protected RSA
+GET http://localhost:3000/api/protected
+Content-Type: application/json
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6ImtleS1yc2EifQ.eyJzdWIiOiJiQGIuY29tIiwiZXhwIjoyMDAwMDAwMDAwfQ.K9QFjvVquRF2-Wt1QRfipOGwiYsmRs7SAwqKskHemFb9BRRZutpfV4oEoHaXMLomTUe8rH0TMjpKcweYK_H1I8D4r-mAN216oUfxCQiFWDB8T2VBI8um-efUg67i2myDZJr5VXdZH8ywj7bn9LyNS4I_xT-J3XvsngeCpuxVSRiYu4FkcUkLrPzbu2sDyBXFqYO9FOorZ8sl0Ninc93fWT2uUrEG8jRyWCa4xpoqbKbm7CN7T2tOKF7mx_xdSPTeSM-U9mUiHsMOrXi1S05IM0hvNJrBduLS6sMTFWrVhis6zqnuxDOirwZS-aN0_SgMDnZTFPsCh8dkqFde1Pv1IYjZfr5OOHjQ9QWj6UDjam6M1eWVPK6QLlxv5bU_gnlAiHm9wJX38-REwmVhIJIBzKxsgJAu1gnRBxe36OM3rkgYxpB86YvfDyOoFlqx8erdxYv38AtvJibe4HB6KLndp_QMm5XXQsbfyEXWGe8hzDwozdhGeQsJXz7PcI3KPlv19PrUM8njElFpOiyfAEXwbtp1EZTzMZ4ZNF6LLFy1fpLcosgyp05o_2YMvngltSnN3v0IPncJx50StdYsoxPN9Ac_nH8VbNlHfmPHMklD1plof0pYf5SiL8yCQP9Uiw9NrN2PeQzbveMKF1T1UNbn2tefxoxr3k6sgWiMH_g_kkk
+
+### Protected EC
+GET http://localhost:3000/api/protected
+Content-Type: application/json
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiIsImtpZCI6ImtleS1lYyJ9.eyJzdWIiOiJiQGIuY29tIiwiZXhwIjoyMDAwMDAwMDAwfQ.r0qaeYJWhjEybhNPgrrFwLBTeLMYtL4IJqOxZyxH9m-JYWqzV0R0WyYQIkf_tQ1UmzqHc9_xzUZnzSjTeEwDHw
+
+### Protected Ed
+GET http://localhost:3000/api/protected
+Content-Type: application/json
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSIsImtpZCI6ImtleS1lZCJ9.eyJzdWIiOiJiQGIuY29tIiwiZXhwIjoyMDAwMDAwMDAwfQ.XAx9msioheXEH1XUEIWMHGBg25JOpBHqcgL_ou_S3fwVht2TbKRiDZ4G6ZyEtn57hCbOy250zTD_g0EbaMGwAg
+
+###
+GET http://localhost:3000/api/protected
+Content-Type: application/json
+Authorization: Bearer blablabla.xxxx.xxxx
+
+
+###
+GET http://localhost:3000/oidc/jwks
+Content-Type: application/json
+
+
+###
+GET http://localhost:3000/oidc/tokens
+Content-Type: application/json
