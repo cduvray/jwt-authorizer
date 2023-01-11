@@ -15,7 +15,8 @@ use std::task::{Context, Poll};
 use tower_layer::Layer;
 use tower_service::Service;
 
-use crate::authorizer::{Authorizer, FnClaimsChecker};
+use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
+use crate::error::InitError;
 
 /// Authorizer Layer builder
 ///
@@ -25,45 +26,54 @@ pub struct JwtAuthorizer<C>
 where
     C: Clone + DeserializeOwned,
 {
-    url: Option<&'static str>,
+    key_source_type: Option<KeySourceType>,
     claims_checker: Option<FnClaimsChecker<C>>,
 }
 
-/// layer builder
+/// authorization layer builder
 impl<C> JwtAuthorizer<C>
 where
     C: Clone + DeserializeOwned + Send + Sync,
 {
     pub fn new() -> Self {
         JwtAuthorizer {
-            url: None,
+            key_source_type: None,
             claims_checker: None,
         }
     }
 
+    /// Build Authorizer Layer from a JWKS endpoint
     pub fn from_jwks_url(mut self, url: &'static str) -> JwtAuthorizer<C> {
-        self.url = Some(url);
+        self.key_source_type = Some(KeySourceType::Jwks(url.to_owned()));
 
         self
     }
 
+    /// Build Authorizer Layer from a RSA PEM file
     pub fn from_rsa_pem(mut self, path: &'static str) -> JwtAuthorizer<C> {
-        // TODO
+        self.key_source_type = Some(KeySourceType::RSA(path.to_owned()));
+
         self
     }
 
-    pub fn from_ec_der(mut self, path: &'static str) -> JwtAuthorizer<C> {
-        // TODO
+    /// Build Authorizer Layer from a EC PEM file
+    pub fn from_ec_pem(mut self, path: &'static str) -> JwtAuthorizer<C> {
+        self.key_source_type = Some(KeySourceType::EC(path.to_owned()));
+
         self
     }
 
-    pub fn from_ed_der(mut self, path: &'static str) -> JwtAuthorizer<C> {
-        // TODO
+    /// Build Authorizer Layer from a EC PEM file
+    pub fn from_ed_pem(mut self, path: &'static str) -> JwtAuthorizer<C> {
+        self.key_source_type = Some(KeySourceType::ED(path.to_owned()));
+
         self
     }
 
-    pub fn from_secret(mut self, path: &'static str) -> JwtAuthorizer<C> {
-        // TODO
+    /// Build Authorizer Layer from a secret phrase
+    pub fn from_secret(mut self, secret: &'static str) -> JwtAuthorizer<C> {
+        self.key_source_type = Some(KeySourceType::Secret(secret));
+
         self
     }
 
@@ -74,12 +84,24 @@ where
         self
     }
 
-    /// build axum layer
-    pub fn layer(&self) -> AsyncAuthorizationLayer<C> {
-        // TODO: replace unwrap
-        let auth = Arc::new(Authorizer::from_jwks_url(self.url.unwrap(), self.claims_checker.clone()).unwrap());
+    /// Build axum layer
+    pub fn layer(&self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+        let auth = if let Some(ref key_source_type) = self.key_source_type {
+            match key_source_type {
+                KeySourceType::RSA(_) | KeySourceType::EC(_) | KeySourceType::ED(_) | KeySourceType::Secret(_) => {
+                    Arc::new(Authorizer::from(key_source_type)?)
+                }
+                KeySourceType::Jwks(url) => {
+                    Arc::new(Authorizer::from_jwks_url(url.as_str(), self.claims_checker.clone())?)
+                }
+            }
+        } else {
+            return Err(InitError::BuilderError(
+                "No key source to build the layer user from_*() to specify the key source!".to_owned(),
+            ));
+        };
 
-        AsyncAuthorizationLayer::new(auth)
+        Ok(AsyncAuthorizationLayer::new(auth))
     }
 }
 

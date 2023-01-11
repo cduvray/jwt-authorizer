@@ -39,7 +39,7 @@ async fn main() {
 
     let api = Router::new()
         .route("/protected", get(protected))
-        .layer(jwt_auth.layer());
+        .layer(jwt_auth.layer().unwrap());
     // .layer(jwt_auth.check_claims(|_: User| true));
 
     let app = Router::new()

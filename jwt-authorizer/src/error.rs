@@ -9,15 +9,24 @@ use thiserror::Error;
 use tracing::log::warn;
 
 #[derive(Debug, Error)]
+pub enum InitError {
+    #[error("Builder Error {0}")]
+    BuilderError(String),
+
+    #[error(transparent)]
+    KeyFileError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    KeyFileDecodingError(#[from] jsonwebtoken::errors::Error),
+}
+
+#[derive(Debug, Error)]
 pub enum AuthError {
     #[error(transparent)]
     JwksSerialisationError(#[from] serde_json::Error),
 
     #[error(transparent)]
     JwksRefreshError(#[from] reqwest::Error),
-
-    #[error(transparent)]
-    KeyFileError(#[from] std::io::Error),
 
     #[error("InvalidKey {0}")]
     InvalidKey(String),
@@ -43,7 +52,6 @@ impl IntoResponse for AuthError {
         warn!("AuthError: {}", &self);
         let (status, error_message) = match self {
             AuthError::JwksRefreshError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-            AuthError::KeyFileError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AuthError::InvalidKid(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
             AuthError::InvalidTokenHeader(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             AuthError::InvalidToken(_) => (StatusCode::BAD_REQUEST, self.to_string()),

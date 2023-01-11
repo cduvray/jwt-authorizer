@@ -21,7 +21,7 @@ Example:
 
     // adding the authorization layer
     let app = Router::new().route("/protected", get(protected))
-            .layer(jwt_auth.layer());         
+            .layer(jwt_auth.layer().unwrap());         
 
     // proteced handler with user injection (mapping some jwt claims) 
     async fn protected(JwtClaims(user): JwtClaims<User>) -> Result<String, AuthError> {
