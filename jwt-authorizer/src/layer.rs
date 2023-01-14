@@ -129,19 +129,28 @@ where
     fn authorize(&self, mut request: Request<B>) -> Self::Future {
         let authorizer = self.auth.clone();
         let h = request.headers();
-        let bearer: Authorization<Bearer> = h.typed_get().unwrap();
+        let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
         Box::pin(async move {
-            if let Ok(token_data) = authorizer.check_auth(bearer.token()).await {
-                // Set `token_data` as a request extension so it can be accessed by other
-                // services down the stack.
-                request.extensions_mut().insert(token_data);
-
-                Ok(request)
+            if let Some(bearer) = bearer_o {
+                if let Ok(token_data) = authorizer.check_auth(bearer.token()).await {
+                    // Set `token_data` as a request extension so it can be accessed by other
+                    // services down the stack.
+                    request.extensions_mut().insert(token_data);
+    
+                    Ok(request)
+                } else {
+                    let unauthorized_response = Response::builder()
+                        .status(StatusCode::UNAUTHORIZED)
+                        .body(Body::empty()) // TODO: add error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
+                        .unwrap();
+    
+                    Err(unauthorized_response)
+                }
             } else {
                 let unauthorized_response = Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .body(Body::empty())
-                    .unwrap();
+                .status(StatusCode::UNAUTHORIZED)
+                .body(Body::empty()) // TODO: add error message (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
+                .unwrap();
 
                 Err(unauthorized_response)
             }
