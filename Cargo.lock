@@ -708,13 +708,14 @@ dependencies = [
 
 [[package]]
 name = "jwt-authorizer"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "axum",
  "futures-core",
  "futures-util",
  "headers",
  "http",
+ "hyper",
  "jsonwebtoken",
  "pin-project",
  "reqwest",
@@ -722,6 +723,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tower",
  "tower-http",
  "tower-layer",
  "tower-service",
