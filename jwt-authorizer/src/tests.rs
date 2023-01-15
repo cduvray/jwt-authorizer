@@ -4,7 +4,7 @@ mod tests {
     use axum::{
         body::Body,
         http::{Request, StatusCode},
-        routing::get, Router,
+        routing::get, Router, response::Response,
     };
     use serde::Deserialize;
     use tower::ServiceExt;
@@ -16,10 +16,7 @@ mod tests {
         sub: String,
     }
 
-    fn app() -> Router {
-
-        let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::new()
-                .from_rsa_pem("../config/jwtRS256.key.pub");
+    fn app(jwt_auth: JwtAuthorizer<User>) -> Router {
 
         Router::new()
             .route("/public", get(|| async { "hello" }))
@@ -32,10 +29,20 @@ mod tests {
             )
     }
 
+    async fn make_proteced_request(jwt_auth: JwtAuthorizer<User>, bearer: &str) -> Response {
+        app(jwt_auth)
+            .oneshot(Request::builder().uri("/protected").header("Authorization", bearer).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
     #[tokio::test]
     async fn protected_without_jwt() {
 
-        let response = app()
+        let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::new()
+                .from_rsa_pem("../config/jwtRS256.key.pub");
+
+        let response = app(jwt_auth)
             .oneshot(Request::builder().uri("/protected").body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -47,12 +54,10 @@ mod tests {
     #[tokio::test]
     async fn protected_with_jwt() {
 
-        let response = app()
-            .oneshot(
-                Request::builder().uri("/protected").header("Authorization", JWT_RSA_OK).body(Body::empty()).unwrap()
-            )
-            .await
-            .unwrap();
+        let response = make_proteced_request(
+            JwtAuthorizer::new().from_rsa_pem("../config/jwtRS256.key.pub"),
+            JWT_RSA_OK
+        ).await;
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -63,15 +68,25 @@ mod tests {
     #[tokio::test]
     async fn protected_with_bad_jwt() {
 
-        let response = app()
-            .oneshot(
-                Request::builder().uri("/protected").header("Authorization", "xxx.xxx.xxx").body(Body::empty()).unwrap()
-            )
-            .await
-            .unwrap();
+        let response = make_proteced_request(
+            JwtAuthorizer::new().from_rsa_pem("../config/jwtRS256.key.pub"),
+            "xxx.xxx.xxx"
+        ).await;
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
         // TODO: check error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
     }
 
+    // Unreachable jwks endpoint, should build (endpoint can comme on line later ),
+    // but should be 500 when checking.
+    #[tokio::test]
+    async fn protected_with_bad_jwks_url() {
+
+        let response = make_proteced_request(
+            JwtAuthorizer::new().from_jwks_url("http://bad-url/xxx/yyy"),
+            JWT_RSA_OK
+        ).await;
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
 }
