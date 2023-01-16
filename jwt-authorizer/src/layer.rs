@@ -1,6 +1,6 @@
+use axum::body::BoxBody;
 use axum::http::Request;
-use axum::response::IntoResponse;
-use axum::{body::Body, response::Response};
+use axum::response::{Response, IntoResponse};
 use futures_core::ready;
 use futures_util::future::BoxFuture;
 use headers::authorization::Bearer;
@@ -123,7 +123,7 @@ where
     C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
     type RequestBody = B;
-    type ResponseBody = Body;
+    type ResponseBody = BoxBody;
     type Future = BoxFuture<'static, Result<Request<B>, Response<Self::ResponseBody>>>;
 
     fn authorize(&self, mut request: Request<B>) -> Self::Future {
@@ -132,27 +132,20 @@ where
         let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
         Box::pin(async move {
             if let Some(bearer) = bearer_o {
-                if let Ok(token_data) = authorizer.check_auth(bearer.token()).await {
-                    // Set `token_data` as a request extension so it can be accessed by other
-                    // services down the stack.
-                    request.extensions_mut().insert(token_data);
-    
-                    Ok(request)
-                } else {
-                    let unauthorized_response = Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .body(Body::empty()) // TODO: add error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
-                        .unwrap();
-    
-                    Err(unauthorized_response)
+                match authorizer.check_auth(bearer.token()).await {
+                    Ok(token_data) =>  {
+                        // Set `token_data` as a request extension so it can be accessed by other
+                        // services down the stack.
+                        request.extensions_mut().insert(token_data);
+        
+                        Ok(request)
+                    },
+                    Err(err) => { 
+                        Err(err.into_response())
+                    }
                 }
             } else {
-                let unauthorized_response = Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .body(Body::empty()) // TODO: add error message (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
-                .unwrap();
-
-                Err(unauthorized_response)
+                Err((StatusCode::UNAUTHORIZED).into_response())
             }
         })
     }
@@ -302,9 +295,7 @@ where
                         }
                         Err(res) => {
                             tracing::info!("err: {:?}", res);
-                            let r = (StatusCode::FORBIDDEN, format!("Unauthorized : {:?}", res)).into_response();
-                            // TODO: replace r by res (type problems: res should be already a 403 error response)
-                            return Poll::Ready(Ok(r));
+                            return Poll::Ready(Ok(res));
                         }
                     };
                 }

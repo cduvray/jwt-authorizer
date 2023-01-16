@@ -1,5 +1,4 @@
 use axum::{
-    extract::rejection::TypedHeaderRejection,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -37,8 +36,8 @@ pub enum AuthError {
     #[error("Invalid Key Algorithm {0:?}")]
     InvalidKeyAlg(Algorithm),
 
-    #[error(transparent)]
-    InvalidTokenHeader(#[from] TypedHeaderRejection),
+    // #[error(transparent)]
+    // InvalidTokenHeader(#[from] TypedHeaderRejection),
 
     #[error(transparent)]
     InvalidToken(#[from] jsonwebtoken::errors::Error),
@@ -49,16 +48,17 @@ pub enum AuthError {
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
+         // TODO: add error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)               
         warn!("AuthError: {}", &self);
         let (status, error_message) = match self {
             AuthError::JwksRefreshError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-            AuthError::InvalidKid(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-            AuthError::InvalidTokenHeader(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            AuthError::InvalidToken(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            AuthError::InvalidKid(msg) => (StatusCode::UNAUTHORIZED, msg),
+            // AuthError::InvalidTokenHeader(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            AuthError::InvalidToken(_) => (StatusCode::UNAUTHORIZED, self.to_string()),
             AuthError::InvalidKey(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
             AuthError::JwksSerialisationError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             AuthError::InvalidKeyAlg(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            AuthError::InvalidClaims() => (StatusCode::FORBIDDEN, self.to_string()),
+            AuthError::InvalidClaims() => (StatusCode::UNAUTHORIZED, self.to_string()),
         };
         let body = axum::Json(serde_json::json!({
             "error": error_message,

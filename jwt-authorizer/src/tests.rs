@@ -47,7 +47,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         // TODO: check error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
     }
 
@@ -73,7 +73,7 @@ mod tests {
             "xxx.xxx.xxx"
         ).await;
 
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         // TODO: check error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
     }
 
