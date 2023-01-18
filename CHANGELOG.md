@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.3.2 - (2023-1-??)
+
+### Fixed
+
+- fix: when jwks store endpoint is unavailable response should be an error 500 (not 403)
+
 ## 0.3.1 - (2023-1-14)
 
 ### Fixed
