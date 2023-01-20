@@ -6,6 +6,7 @@ mod tests {
         http::{Request, StatusCode},
         routing::get, Router, response::Response,
     };
+    use http::header;
     use serde::Deserialize;
     use tower::ServiceExt;
 
@@ -48,7 +49,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        // TODO: check error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
+        
+        assert!(response.headers().get(header::WWW_AUTHENTICATE).is_some(), "Must have a WWW-Authenticate header!");
+        assert_eq!(response.headers().get(header::WWW_AUTHENTICATE).unwrap(), &"Bearer"); // TODO: realm="example"
     }
 
     #[tokio::test]

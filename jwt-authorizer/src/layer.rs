@@ -5,7 +5,6 @@ use futures_core::ready;
 use futures_util::future::BoxFuture;
 use headers::authorization::Bearer;
 use headers::{Authorization, HeaderMapExt};
-use http::StatusCode;
 use pin_project::pin_project;
 use serde::de::DeserializeOwned;
 use std::future::Future;
@@ -15,6 +14,7 @@ use std::task::{Context, Poll};
 use tower_layer::Layer;
 use tower_service::Service;
 
+use crate::AuthError;
 use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
 use crate::error::InitError;
 
@@ -145,7 +145,7 @@ where
                     }
                 }
             } else {
-                Err((StatusCode::UNAUTHORIZED).into_response())
+                Err(AuthError::MissingToken().into_response())
             }
         })
     }
