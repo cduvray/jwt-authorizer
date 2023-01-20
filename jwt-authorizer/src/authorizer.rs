@@ -66,7 +66,7 @@ where
         })
     }
 
-    pub fn from(key_source_type: &KeySourceType) -> Result<Authorizer<C>, InitError> {
+    pub fn from(key_source_type: &KeySourceType, claims_checker: Option<FnClaimsChecker<C>>) -> Result<Authorizer<C>, InitError> {
         let key = match key_source_type {
             KeySourceType::RSA(path) => DecodingKey::from_rsa_pem(&read_data(path.as_str())?)?,
             KeySourceType::EC(path) => DecodingKey::from_ec_der(&read_data(path.as_str())?),
@@ -77,7 +77,7 @@ where
 
         Ok(Authorizer {
             key_source: KeySource::DecodingKeySource(key),
-            claims_checker: None,
+            claims_checker,
         })
     }
 
@@ -116,7 +116,7 @@ mod tests {
     #[tokio::test]
     async fn from_secret() {
         let h = Header::new(Algorithm::HS256);
-        let a = Authorizer::<Value>::from(&KeySourceType::Secret("xxxxxx")).unwrap();
+        let a = Authorizer::<Value>::from(&KeySourceType::Secret("xxxxxx"), None).unwrap();
         let k = a.key_source.get_key(h);
         assert!(k.await.is_ok());
     }
@@ -140,22 +140,22 @@ mod tests {
 
     #[tokio::test]
     async fn from_file() {
-        let a = Authorizer::<Value>::from(&KeySourceType::RSA("../config/jwtRS256.key.pub".to_owned())).unwrap();
+        let a = Authorizer::<Value>::from(&KeySourceType::RSA("../config/jwtRS256.key.pub".to_owned()), None).unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::RS256));
         assert!(k.await.is_ok());
 
-        let a = Authorizer::<Value>::from(&KeySourceType::EC("../config/ec256-public.pem".to_owned())).unwrap();
+        let a = Authorizer::<Value>::from(&KeySourceType::EC("../config/ec256-public.pem".to_owned()), None).unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::ES256));
         assert!(k.await.is_ok());
 
-        let a = Authorizer::<Value>::from(&KeySourceType::ED("../config/ed25519-public.pem".to_owned())).unwrap();
+        let a = Authorizer::<Value>::from(&KeySourceType::ED("../config/ed25519-public.pem".to_owned()), None).unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::EdDSA));
         assert!(k.await.is_ok());
     }
 
     #[tokio::test]
     async fn from_file_errors() {
-        let a = Authorizer::<Value>::from(&KeySourceType::RSA("./config/does-not-exist.pem".to_owned()));
+        let a = Authorizer::<Value>::from(&KeySourceType::RSA("./config/does-not-exist.pem".to_owned()), None);
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }

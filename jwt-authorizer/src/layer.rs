@@ -89,7 +89,7 @@ where
         let auth = if let Some(ref key_source_type) = self.key_source_type {
             match key_source_type {
                 KeySourceType::RSA(_) | KeySourceType::EC(_) | KeySourceType::ED(_) | KeySourceType::Secret(_) => {
-                    Arc::new(Authorizer::from(key_source_type)?)
+                    Arc::new(Authorizer::from(key_source_type, self.claims_checker.clone())?)
                 }
                 KeySourceType::Jwks(url) => {
                     Arc::new(Authorizer::from_jwks_url(url.as_str(), self.claims_checker.clone())?)

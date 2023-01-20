@@ -6,7 +6,7 @@ mod tests {
         http::{Request, StatusCode},
         routing::get, Router, response::Response,
     };
-    use http::header;
+    use http::{header, HeaderValue};
     use serde::Deserialize;
     use tower::ServiceExt;
 
@@ -78,6 +78,28 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         // TODO: check error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
+    }
+
+    #[tokio::test]
+    async fn protected_with_claims_check() {
+
+        let rsp_ok = make_proteced_request(
+            JwtAuthorizer::new().from_rsa_pem("../config/jwtRS256.key.pub").with_check(|_|true),
+            JWT_RSA_OK
+        ).await;
+
+        assert_eq!(rsp_ok.status(), StatusCode::OK);
+
+        let rsp_ko = make_proteced_request(
+            JwtAuthorizer::new().from_rsa_pem("../config/jwtRS256.key.pub").with_check(|_|false),
+            JWT_RSA_OK
+        ).await;
+
+        assert_eq!(rsp_ko.status(), StatusCode::UNAUTHORIZED);
+
+        let h = rsp_ko.headers().get(http::header::WWW_AUTHENTICATE);
+        assert!(h.is_some(), "WWW-AUTHENTICATE header missing!");
+        assert_eq!(h.unwrap(), HeaderValue::from_static("Bearer error=\"insufficient_scope\""), "Bad WWW-AUTHENTICATE header!");
     }
 
     // Unreachable jwks endpoint, should build (endpoint can comme on line later ),
