@@ -1,6 +1,6 @@
 use axum::{
     http::StatusCode,
-    response::{IntoResponse, Response}, body::{self, Empty},
+    response::{IntoResponse, Response}, body::{self, Empty, BoxBody},
 };
 use http::header;
 use jsonwebtoken::Algorithm;
@@ -47,71 +47,63 @@ pub enum AuthError {
     InvalidClaims(),
 }
 
+fn response_wwwauth(status: StatusCode, bearer: &str) ->  Response<BoxBody> {
+    let mut res = Response::new(body::boxed(Empty::new()));
+    *res.status_mut() = status;
+    let h = if bearer.is_empty() {
+        format!("Bearer")
+    } else {
+        format!("Bearer {}", bearer)
+    };
+    res.headers_mut().insert(header::WWW_AUTHENTICATE, h.parse().unwrap());
+
+    res
+}
+
+fn response_500() ->  Response<BoxBody> {
+    let mut res = Response::new(body::boxed(Empty::new()));
+    *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+
+    res
+}
+
 /// (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)  
 impl IntoResponse for AuthError {
-    fn into_response(self) -> Response {             
-        warn!("AuthError: {}", &self);
+    fn into_response(self) -> Response {
         let resp = match self {
             AuthError::JwksRefreshError(err) =>  {
                 tracing::error!("AuthErrors::JwksRefreshError: {}", err);
-                let mut res = Response::new(body::boxed(Empty::new()));
-                *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                res
+                response_500()
             },
             AuthError::InvalidKey(err) =>  {
-                tracing::error!("AuthErrors::InvalidKey: {}", err);
-                let mut res = Response::new(body::boxed(Empty::new()));
-                *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                res
+                tracing::error!("AuthErrors::InvalidKey: {}", err);               
+                response_500()
             },
             AuthError::JwksSerialisationError(err) => {
-                tracing::error!("AuthErrors::JwksSerialisationError: {}", err);
-                let mut res = Response::new(body::boxed(Empty::new()));
-                *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                res
+                tracing::error!("AuthErrors::JwksSerialisationError: {}", err);               
+                response_500()
             },
             AuthError::InvalidKeyAlg(err) => {
                 debug!("AuthErrors::InvalidKeyAlg: {:?}", err);
-                let mut res = Response::new(body::boxed(Empty::new()));
-                *res.status_mut() = StatusCode::UNAUTHORIZED;
-                res.headers_mut().insert(header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\", error_description=\"invalid key algorithm\"".parse().unwrap());
-                res
+                response_wwwauth(StatusCode::UNAUTHORIZED, "error=\"invalid_token\", error_description=\"invalid key algorithm\"")
             },
             AuthError::InvalidKid(err) => {
                 debug!("AuthErrors::InvalidKid: {}", err);
-                let mut res = Response::new(body::boxed(Empty::new()));
-                *res.status_mut() = StatusCode::UNAUTHORIZED;
-                res.headers_mut().insert(header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\", error_description=\"invalid kid\"".parse().unwrap());
-                res
+                response_wwwauth(StatusCode::UNAUTHORIZED, "error=\"invalid_token\", error_description=\"invalid kid\"")
             },
             AuthError::InvalidToken(err) => {
                 debug!("AuthErrors::InvalidToken: {}", err);
-                let mut res = Response::new(body::boxed(Empty::new()));
-                *res.status_mut() = StatusCode::UNAUTHORIZED;
-                res.headers_mut().insert(header::WWW_AUTHENTICATE, "Bearer error=\"invalid_token\"".parse().unwrap());
-                res
+                response_wwwauth(StatusCode::UNAUTHORIZED, "error=\"invalid_token\"")
             },
             AuthError::MissingToken() => {
-                // WWW-Authenticate: Bearer realm="example"
                 debug!("AuthErrors::MissingToken");
-                let mut res = Response::new(body::boxed(Empty::new()));
-                *res.status_mut() = StatusCode::UNAUTHORIZED;
-                res.headers_mut().insert(header::WWW_AUTHENTICATE, "Bearer".parse().unwrap());
-                res
+                response_wwwauth(StatusCode::UNAUTHORIZED, "")
             },
             AuthError::InvalidClaims() => {
-                // WWW-Authenticate: Bearer error="insufficient_scope"
                 debug!("AuthErrors::InvalidClaims");
-                let mut res = Response::new(body::boxed(Empty::new()));
-                *res.status_mut() = StatusCode::UNAUTHORIZED;
-                res.headers_mut().insert(header::WWW_AUTHENTICATE, "Bearer error=\"insufficient_scope\"".parse().unwrap());
-
-                res
+                response_wwwauth(StatusCode::FORBIDDEN, "error=\"insufficient_scope\"")
             },
         };
-        // let body = axum::Json(serde_json::json!({
-        //    "error": error_message,
-        // }));
 
         resp
     }

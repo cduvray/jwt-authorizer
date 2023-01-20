@@ -95,7 +95,7 @@ mod tests {
             JWT_RSA_OK
         ).await;
 
-        assert_eq!(rsp_ko.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(rsp_ko.status(), StatusCode::FORBIDDEN);
 
         let h = rsp_ko.headers().get(http::header::WWW_AUTHENTICATE);
         assert!(h.is_some(), "WWW-AUTHENTICATE header missing!");
