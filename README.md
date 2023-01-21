@@ -7,7 +7,8 @@ JWT authorizer Layer for Axum.
 - JWT token verification  (Bearer)
 - Claims extraction
 - JWKS endpoint support (with refresh)
-- algoritms: ECDSA, RSA, EdDSA, HS
+- Algoritms: ECDSA, RSA, EdDSA, HS
+- Claims checker
 
 ## Usage
 

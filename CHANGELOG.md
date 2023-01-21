@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## 0.3.2 - (2023-1-??)
+## 0.4.0 - (2023-1-21)
+
+### Added
+
+- claims checker (stabilisation, tests, documentation)
+
+### Fixed
+
+- added missing WWW-Authenticate header to errors
+
+## 0.3.2 - (2023-1-18)
 
 ### Fixed
 

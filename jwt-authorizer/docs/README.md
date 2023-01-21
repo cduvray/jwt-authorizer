@@ -34,3 +34,30 @@ Example:
         .serve(app.into_make_service()).await.expect("server failed");
     # };
 ```
+
+## ClaimsChecker
+
+A check function (mapping deserialized claims to boolean) can be added to the authorizer. 
+
+A check failure results in a 403 (WWW-Authenticate: Bearer error="insufficient_scope") error.
+
+Example:
+
+```rust
+
+    use jwt_authorizer::{JwtAuthorizer};
+    use serde::Deserialize;
+
+    // Authorized entity, struct deserializable from JWT claims
+    #[derive(Debug, Deserialize, Clone)]
+    struct User {
+        sub: String,
+    }
+
+    let authorizer = JwtAuthorizer::new()
+                    .from_rsa_pem("../config/jwtRS256.key.pub")
+                    .with_check(
+                        |claims: &User| claims.sub.contains('@') // must be an email
+                    );
+```
+
