@@ -114,4 +114,17 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
+
+    #[tokio::test]
+    async fn extract_from_public_500() {
+        let app = Router::new().route("/public", 
+                get(|JwtClaims(user): JwtClaims<User>| async move {
+                    format!("hello: {}", user.sub)
+                }));
+        let response = app.oneshot(Request::builder().uri("/public").body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
 }

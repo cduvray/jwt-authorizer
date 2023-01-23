@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- claims extractor (JwtClaims) without authorizer should not panic, should send a 500 error
+
 ## 0.4.0 - (2023-1-21)
 
 ### Added

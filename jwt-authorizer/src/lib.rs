@@ -1,6 +1,7 @@
 #![doc = include_str!("../docs/README.md")]
 
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use http::StatusCode;
 use jsonwebtoken::TokenData;
 use serde::de::DeserializeOwned;
 
@@ -22,13 +23,15 @@ where
     T: DeserializeOwned + Send + Sync + Clone + 'static,
     S: Send + Sync,
 {
-    type Rejection = error::AuthError;
+    type Rejection = StatusCode;
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
-        let claims = parts.extensions.get::<TokenData<T>>().unwrap(); // TODO: unwrap -> err
-        Ok(JwtClaims(claims.claims.clone())) // TODO: unwrap -> err
+        tracing::error!("JwtClaims extractor must be behind a jwt-authoriser layer!");
+
+        if let Some(claims) = parts.extensions.get::<TokenData<T>>() {
+            Ok(JwtClaims(claims.claims.clone()))
+        } else {
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
-
-#[cfg(test)]
-mod tests;

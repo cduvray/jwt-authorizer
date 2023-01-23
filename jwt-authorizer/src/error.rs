@@ -6,7 +6,7 @@ use http::header;
 use jsonwebtoken::Algorithm;
 use thiserror::Error;
 
-use tracing::{log::warn, debug};
+use tracing::debug;
 
 #[derive(Debug, Error)]
 pub enum InitError {
