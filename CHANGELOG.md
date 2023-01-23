@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- JwtAuthorizer creation simplified:
+
+   - JwtAuthorizer::from_* creates an instance, new() is not necessary anymore
+
 ### Fixed
 
 - claims extractor (JwtClaims) without authorizer should not panic, should send a 500 error

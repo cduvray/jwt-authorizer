@@ -28,8 +28,8 @@ async fn main() {
 
     // First let's create an authorizer builder from a JWKS Endpoint
     // User is a struct deserializable from JWT claims representing the authorized user
-    let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::new()
-        .from_jwks_url("http://localhost:3000/oidc/jwks")
+    let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::
+        from_jwks_url("http://localhost:3000/oidc/jwks")
         .with_check(claim_checker);
 
     let oidc = Router::new()

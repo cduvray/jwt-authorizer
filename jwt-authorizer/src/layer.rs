@@ -35,46 +35,44 @@ impl<C> JwtAuthorizer<C>
 where
     C: Clone + DeserializeOwned + Send + Sync,
 {
-    pub fn new() -> Self {
+    /// Build Authorizer Layer from a JWKS endpoint
+    pub fn from_jwks_url(url: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
-            key_source_type: None,
+            key_source_type: Some(KeySourceType::Jwks(url.to_owned())),
             claims_checker: None,
         }
     }
 
-    /// Build Authorizer Layer from a JWKS endpoint
-    pub fn from_jwks_url(mut self, url: &'static str) -> JwtAuthorizer<C> {
-        self.key_source_type = Some(KeySourceType::Jwks(url.to_owned()));
-
-        self
-    }
-
     /// Build Authorizer Layer from a RSA PEM file
-    pub fn from_rsa_pem(mut self, path: &'static str) -> JwtAuthorizer<C> {
-        self.key_source_type = Some(KeySourceType::RSA(path.to_owned()));
-
-        self
+    pub fn from_rsa_pem(path: &'static str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: Some(KeySourceType::RSA(path.to_owned())),
+            claims_checker: None,
+        }
     }
 
     /// Build Authorizer Layer from a EC PEM file
-    pub fn from_ec_pem(mut self, path: &'static str) -> JwtAuthorizer<C> {
-        self.key_source_type = Some(KeySourceType::EC(path.to_owned()));
-
-        self
+    pub fn from_ec_pem(path: &'static str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: Some(KeySourceType::EC(path.to_owned())),
+            claims_checker: None,
+        }
     }
 
     /// Build Authorizer Layer from a EC PEM file
-    pub fn from_ed_pem(mut self, path: &'static str) -> JwtAuthorizer<C> {
-        self.key_source_type = Some(KeySourceType::ED(path.to_owned()));
-
-        self
+    pub fn from_ed_pem(path: &'static str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: Some(KeySourceType::ED(path.to_owned())),
+            claims_checker: None,
+        }
     }
 
     /// Build Authorizer Layer from a secret phrase
-    pub fn from_secret(mut self, secret: &'static str) -> JwtAuthorizer<C> {
-        self.key_source_type = Some(KeySourceType::Secret(secret));
-
-        self
+    pub fn from_secret(secret: &'static str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: Some(KeySourceType::Secret(secret)),
+            claims_checker: None,
+        }
     }
 
     /// layer that checks token validity and claim constraints (custom function)

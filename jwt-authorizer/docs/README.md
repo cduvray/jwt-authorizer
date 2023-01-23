@@ -16,8 +16,8 @@ Example:
     }
 
     // let's create an authorizer builder from a JWKS Endpoint
-    let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::new()
-                .from_jwks_url("http://localhost:3000/oidc/jwks");
+    let jwt_auth: JwtAuthorizer<User> = 
+                    JwtAuthorizer::from_jwks_url("http://localhost:3000/oidc/jwks");
 
     // adding the authorization layer
     let app = Router::new().route("/protected", get(protected))
@@ -54,8 +54,7 @@ Example:
         sub: String,
     }
 
-    let authorizer = JwtAuthorizer::new()
-                    .from_rsa_pem("../config/jwtRS256.key.pub")
+    let authorizer = JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub")
                     .with_check(
                         |claims: &User| claims.sub.contains('@') // must be an email
                     );

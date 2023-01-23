@@ -40,8 +40,7 @@ mod tests {
     #[tokio::test]
     async fn protected_without_jwt() {
 
-        let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::new()
-                .from_rsa_pem("../config/jwtRS256.key.pub");
+        let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub");
 
         let response = app(jwt_auth)
             .oneshot(Request::builder().uri("/protected").body(Body::empty()).unwrap())
@@ -58,7 +57,7 @@ mod tests {
     async fn protected_with_jwt() {
 
         let response = make_proteced_request(
-            JwtAuthorizer::new().from_rsa_pem("../config/jwtRS256.key.pub"),
+            JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub"),
             JWT_RSA_OK
         ).await;
 
@@ -72,7 +71,7 @@ mod tests {
     async fn protected_with_bad_jwt() {
 
         let response = make_proteced_request(
-            JwtAuthorizer::new().from_rsa_pem("../config/jwtRS256.key.pub"),
+            JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub"),
             "xxx.xxx.xxx"
         ).await;
 
@@ -84,14 +83,14 @@ mod tests {
     async fn protected_with_claims_check() {
 
         let rsp_ok = make_proteced_request(
-            JwtAuthorizer::new().from_rsa_pem("../config/jwtRS256.key.pub").with_check(|_|true),
+            JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub").with_check(|_|true),
             JWT_RSA_OK
         ).await;
 
         assert_eq!(rsp_ok.status(), StatusCode::OK);
 
         let rsp_ko = make_proteced_request(
-            JwtAuthorizer::new().from_rsa_pem("../config/jwtRS256.key.pub").with_check(|_|false),
+            JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub").with_check(|_|false),
             JWT_RSA_OK
         ).await;
 
@@ -108,7 +107,7 @@ mod tests {
     async fn protected_with_bad_jwks_url() {
 
         let response = make_proteced_request(
-            JwtAuthorizer::new().from_jwks_url("http://bad-url/xxx/yyy"),
+            JwtAuthorizer::from_jwks_url("http://bad-url/xxx/yyy"),
             JWT_RSA_OK
         ).await;
 
