@@ -51,7 +51,7 @@ fn response_wwwauth(status: StatusCode, bearer: &str) ->  Response<BoxBody> {
     let mut res = Response::new(body::boxed(Empty::new()));
     *res.status_mut() = status;
     let h = if bearer.is_empty() {
-        format!("Bearer")
+        "Bearer".to_owned()
     } else {
         format!("Bearer {}", bearer)
     };
