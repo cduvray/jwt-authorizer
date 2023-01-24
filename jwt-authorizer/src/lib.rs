@@ -26,11 +26,10 @@ where
     type Rejection = StatusCode;
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
-        tracing::error!("JwtClaims extractor must be behind a jwt-authoriser layer!");
-
         if let Some(claims) = parts.extensions.get::<TokenData<T>>() {
             Ok(JwtClaims(claims.claims.clone()))
         } else {
+            tracing::error!("JwtClaims extractor must be behind a jwt-authoriser layer!");
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
