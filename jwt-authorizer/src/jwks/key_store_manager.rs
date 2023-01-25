@@ -10,21 +10,47 @@ use tokio::sync::Mutex;
 
 use crate::error::AuthError;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum RefreshStrategy {
+
     /// refresh periodicaly
-    Interval(Duration),
+    Interval,
+
     /// when kid not found in the store
     KeyNotFound,
-    // other strategies? KeyNotFoundOrInterval(Duration), Once,
+
+    /// load once triggered by the first use
+    NoRefresh,
+}
+
+/// JWKS Refresh configuration
+#[derive(Clone, Copy)]
+pub struct Refresh {
+    pub strategy: RefreshStrategy,
+    // after the interval the store will be refreshed (before getting a new key - lazy behaviour)
+    pub refresh_interval: Duration,
+    // don't refresh before (counting from the last refresh, when the kid not found)
+    pub minimal_refresh_interval: Duration,
+    // don't refresh before (after an error or jwks unawailable)
+    pub retry_interval: Duration,
+}
+
+impl Default for Refresh {
+    fn default() -> Self {
+        Self { 
+            strategy: RefreshStrategy::KeyNotFound,
+            refresh_interval: Duration::from_secs(600),
+            minimal_refresh_interval: Duration::from_secs(30),
+            retry_interval: Duration::from_secs(10),
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct KeyStoreManager {
     key_url: String,
-    refresh: RefreshStrategy,
     /// in case of fail loading (error or key not found), minimal interval
-    minimal_refresh_interval: Duration,
+    refresh: Refresh,
     keystore: Arc<Mutex<KeyStore>>,
 }
 
@@ -38,11 +64,10 @@ pub struct KeyStore {
 }
 
 impl KeyStoreManager {
-    pub(crate) fn new(url: &str, refresh: RefreshStrategy) -> KeyStoreManager {
+    pub(crate) fn new(url: &str, refresh: Refresh) -> KeyStoreManager {
         KeyStoreManager {
             key_url: url.to_owned(),
             refresh,
-            minimal_refresh_interval: Duration::from_secs(5), // TODO: make configurable
             keystore: Arc::new(Mutex::new(KeyStore {
                 jwks: JwkSet { keys: vec![] },
                 load_time: None,
@@ -51,20 +76,12 @@ impl KeyStoreManager {
         }
     }
 
-    pub(crate) fn with_refresh(url: &str) -> KeyStoreManager {
-        KeyStoreManager::new(url, RefreshStrategy::KeyNotFound)
-    }
-
-    pub(crate) fn with_refresh_interval(url: &str, interval: Duration) -> KeyStoreManager {
-        KeyStoreManager::new(url, RefreshStrategy::Interval(interval))
-    }
-
     pub(crate) async fn get_key(&self, header: &jsonwebtoken::Header) -> Result<jsonwebtoken::DecodingKey, AuthError> {
         let kstore = self.keystore.clone();
         let mut ks_gard = kstore.lock().await;
-        let key = match self.refresh {
-            RefreshStrategy::Interval(refresh_interval) => {
-                if ks_gard.should_refresh(refresh_interval) && ks_gard.can_refresh(self.minimal_refresh_interval) {
+        let key = match self.refresh.strategy {
+            RefreshStrategy::Interval => {
+                if ks_gard.should_refresh(self.refresh.refresh_interval) && ks_gard.can_refresh(self.refresh.minimal_refresh_interval, self.refresh.retry_interval) {
                     ks_gard.refresh(&self.key_url, &[]).await?;
                 }
                 if let Some(ref kid) = header.kid {
@@ -82,12 +99,13 @@ impl KeyStoreManager {
                     let jwk_opt = ks_gard.find_kid(kid);
                     if let Some(jwk) = jwk_opt {
                         jwk
-                    } else if ks_gard.can_refresh(self.minimal_refresh_interval) {
+                    } else if ks_gard.can_refresh(self.refresh.minimal_refresh_interval, self.refresh.retry_interval) {
                         ks_gard.refresh(&self.key_url, &[("kid", kid)]).await?;
                         ks_gard
                             .find_kid(kid)
                             .ok_or_else(|| AuthError::InvalidKid(kid.to_owned()))?
                     } else {
+
                         return Err(AuthError::InvalidKid(kid.to_owned()));
                     }
                 } else {
@@ -95,7 +113,7 @@ impl KeyStoreManager {
                     // .ok_or(AuthError::InvalidKeyAlg(header.alg))?
                     if let Some(jwk) = jwk_opt {
                         jwk
-                    } else if ks_gard.can_refresh(self.minimal_refresh_interval) {
+                    } else if ks_gard.can_refresh(self.refresh.minimal_refresh_interval, self.refresh.retry_interval) {
                         ks_gard
                             .refresh(
                                 &self.key_url,
@@ -113,6 +131,20 @@ impl KeyStoreManager {
                         return Err(AuthError::InvalidKeyAlg(header.alg));
                     }
                 }
+            },
+            RefreshStrategy::NoRefresh => {
+                if ks_gard.load_time.is_none() {
+                    ks_gard.refresh(&self.key_url, &[]).await?;
+                }
+                if let Some(ref kid) = header.kid {
+                    ks_gard
+                        .find_kid(kid)
+                        .ok_or_else(|| AuthError::InvalidKid(kid.to_owned()))?
+                } else {
+                    ks_gard
+                        .find_alg(&header.alg)
+                        .ok_or(AuthError::InvalidKeyAlg(header.alg))?
+                }
             }
         };
 
@@ -129,15 +161,15 @@ impl KeyStore {
         }
     }
 
-    fn can_refresh(&self, minimal_refresh_interval: Duration) -> bool {
-        if let Some(ft) = self.fail_time {
-            if let Some(lt) = self.load_time {
-                ft.elapsed() > minimal_refresh_interval && lt.elapsed() > minimal_refresh_interval
+    fn can_refresh(&self, minimal_refresh_interval: Duration, minimal_retry: Duration) -> bool {
+        if let Some(fail_tm) = self.fail_time {
+            if let Some(load_tm) = self.load_time {
+                fail_tm.elapsed() > minimal_retry && load_tm.elapsed() > minimal_refresh_interval
             } else {
-                ft.elapsed() > minimal_refresh_interval
+                fail_tm.elapsed() > minimal_retry
             }
-        } else if let Some(lt) = self.load_time {
-            lt.elapsed() > minimal_refresh_interval
+        } else if let Some(load_tm) = self.load_time {
+            load_tm.elapsed() > minimal_refresh_interval
         } else {
             true
         }
@@ -196,6 +228,7 @@ mod tests {
         Mock, MockServer, ResponseTemplate,
     };
 
+    use crate::{RefreshStrategy, Refresh};
     use crate::jwks::key_store_manager::{KeyStore, KeyStoreManager};
 
     #[test]
@@ -219,21 +252,34 @@ mod tests {
 
     #[test]
     fn keystore_can_refresh() {
+
+        // FAIL, NO LOAD
         let ks = KeyStore {
             jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
             fail_time: Some(Instant::now() - Duration::from_secs(5)),
             load_time: None,
         };
-        assert!(ks.can_refresh(Duration::from_secs(4)));
-        assert!(!ks.can_refresh(Duration::from_secs(6)));
+        assert!(ks.can_refresh(Duration::from_secs(4), Duration::from_secs(4)));
+        assert!(ks.can_refresh(Duration::from_secs(6), Duration::from_secs(4)));
+        assert!(!ks.can_refresh(Duration::from_secs(6), Duration::from_secs(6)));
 
+        // NO FAIL, LOAD
         let ks = KeyStore {
             jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
             fail_time: None,
             load_time: Some(Instant::now() - Duration::from_secs(5)),
         };
-        assert!(ks.can_refresh(Duration::from_secs(4)));
-        assert!(!ks.can_refresh(Duration::from_secs(6)));
+        assert!(ks.can_refresh(Duration::from_secs(4), Duration::from_secs(4)));
+        assert!(!ks.can_refresh(Duration::from_secs(6), Duration::from_secs(6)));
+
+        // FAIL, LOAD
+        let ks = KeyStore {
+            jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
+            fail_time: Some(Instant::now() - Duration::from_secs(5)),
+            load_time: Some(Instant::now() - Duration::from_secs(10)),
+        };
+        assert!(ks.can_refresh(Duration::from_secs(6), Duration::from_secs(4)));
+        assert!(!ks.can_refresh(Duration::from_secs(6), Duration::from_secs(6)));
     }
 
     #[test]
@@ -295,7 +341,10 @@ mod tests {
         )
         .await;
 
-        let ksm = KeyStoreManager::with_refresh_interval(&mock_server.uri(), Duration::from_secs(3000));
+        let ksm = KeyStoreManager::new(
+            &mock_server.uri(),
+            Refresh {strategy: RefreshStrategy::Interval, refresh_interval: Duration::from_secs(3000), ..Default::default()}
+        );
         let r = ksm.get_key(&Header::new(Algorithm::EdDSA)).await;
         assert!(r.is_ok());
         mock_server.verify().await;
@@ -317,7 +366,9 @@ mod tests {
         )
         .await;
 
-        let mut ksm = KeyStoreManager::with_refresh(&mock_server.uri());
+        let mut ksm = KeyStoreManager::new(
+            &mock_server.uri(),
+            Refresh {strategy: RefreshStrategy::KeyNotFound, ..Default::default()});
 
         // STEP 1: initial (lazy) reloading
         let r = ksm.get_key(&build_header("key-ed", Algorithm::EdDSA)).await;
@@ -341,7 +392,7 @@ mod tests {
         let h = build_header("key-ed02", Algorithm::EdDSA);
         assert!(ksm.get_key(&h).await.is_err());
 
-        ksm.minimal_refresh_interval = Duration::from_millis(100);
+        ksm.refresh.minimal_refresh_interval = Duration::from_millis(100);
         tokio::time::sleep(Duration::from_millis(101)).await;
         assert!(ksm.get_key(&h).await.is_ok());
 
@@ -367,6 +418,38 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(101)).await;
         assert!(ksm.get_key(&h).await.is_ok());
+
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn keystore_manager_find_key_with_no_refresh() {
+        let mock_server = MockServer::start().await;
+        mock_jwks_response_once(
+            &mock_server,
+            r#"{
+                "kty": "OKP",
+                "use": "sig",
+                "crv": "Ed25519",
+                "x": "uWtSkE-I9aTMYTTvuTE1rtu0rNdxp3DU33cJ_ksL1Gk",
+                "kid": "key-ed",
+                "alg": "EdDSA"
+              }"#,
+        )
+        .await;
+
+        let ksm = KeyStoreManager::new(
+            &mock_server.uri(),
+            Refresh {strategy: RefreshStrategy::NoRefresh, ..Default::default()});
+
+        // STEP 1: initial (lazy) reloading
+        let r = ksm.get_key(&build_header("key-ed", Algorithm::EdDSA)).await;
+        assert!(r.is_ok());
+        mock_server.verify().await;
+
+        // STEP2: new kid -> reloading ksm
+        let h = build_header("key-ed02", Algorithm::EdDSA);
+        assert!(ksm.get_key(&h).await.is_err());
 
         mock_server.verify().await;
     }

@@ -29,13 +29,6 @@ pub struct Keys {
 }
 
 impl Keys {
-    fn new(secret: &[u8]) -> Self {
-        Self {
-            alg: Algorithm::HS256,
-            encoding: EncodingKey::from_secret(secret),
-            decoding: DecodingKey::from_secret(secret),
-        }
-    }
     fn load_rsa() -> Self {
         Self {
             alg: Algorithm::RS256,

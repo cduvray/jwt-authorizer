@@ -14,9 +14,10 @@ use std::task::{Context, Poll};
 use tower_layer::Layer;
 use tower_service::Service;
 
-use crate::AuthError;
+use crate::{AuthError, RefreshStrategy};
 use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
 use crate::error::InitError;
+use crate::jwks::key_store_manager::Refresh;
 
 /// Authorizer Layer builder
 ///
@@ -27,6 +28,7 @@ where
     C: Clone + DeserializeOwned,
 {
     key_source_type: Option<KeySourceType>,
+    refresh: Option<Refresh>,
     claims_checker: Option<FnClaimsChecker<C>>,
 }
 
@@ -39,6 +41,7 @@ where
     pub fn from_jwks_url(url: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::Jwks(url.to_owned())),
+            refresh: Default::default(),
             claims_checker: None,
         }
     }
@@ -47,6 +50,7 @@ where
     pub fn from_rsa_pem(path: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::RSA(path.to_owned())),
+            refresh: Default::default(),
             claims_checker: None,
         }
     }
@@ -55,6 +59,7 @@ where
     pub fn from_ec_pem(path: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::EC(path.to_owned())),
+            refresh: Default::default(),
             claims_checker: None,
         }
     }
@@ -63,6 +68,7 @@ where
     pub fn from_ed_pem(path: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::ED(path.to_owned())),
+            refresh: Default::default(),
             claims_checker: None,
         }
     }
@@ -71,12 +77,35 @@ where
     pub fn from_secret(secret: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::Secret(secret)),
+            refresh: Default::default(),
             claims_checker: None,
         }
     }
 
-    /// layer that checks token validity and claim constraints (custom function)
-    pub fn with_check(mut self, checker_fn: fn(&C) -> bool) -> JwtAuthorizer<C> {
+    /// refresh configuration for jwk store
+    pub fn refresh(mut self, refresh: Refresh) -> JwtAuthorizer<C> {
+        if self.refresh.is_some() {
+            tracing::warn!("More than one refresh configuration found!");
+        }
+        self.refresh = Some(refresh);
+        self
+    }
+
+    /// no refresh, jwks will be loaded juste once
+    pub fn no_refresh(mut self) -> JwtAuthorizer<C> {
+        if self.refresh.is_some() {
+            tracing::warn!("More than one refresh configuration found!");
+        }
+        self.refresh = Some(Refresh {
+            strategy: RefreshStrategy::NoRefresh,
+            ..Default::default()
+        });
+        self
+    }
+
+    /// configures token content check (custom function), if false a 403 will be sent.
+    /// (AuthError::InvalidClaims())
+    pub fn check(mut self, checker_fn: fn(&C) -> bool) -> JwtAuthorizer<C> {
         self.claims_checker = Some(FnClaimsChecker { checker_fn });
 
         self
@@ -90,7 +119,9 @@ where
                     Arc::new(Authorizer::from(key_source_type, self.claims_checker.clone())?)
                 }
                 KeySourceType::Jwks(url) => {
-                    Arc::new(Authorizer::from_jwks_url(url.as_str(), self.claims_checker.clone())?)
+                    Arc::new(
+                        Authorizer::from_jwks_url(
+                            url.as_str(), self.claims_checker.clone(), self.refresh.unwrap_or_default())?)
                 }
             }
         } else {

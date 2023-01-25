@@ -10,8 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - JwtAuthorizer creation simplified:
-
    - JwtAuthorizer::from_* creates an instance, new() is not necessary anymore
+- with_check() renamed to check()
+
+### Added
+
+- jwks store refresh configuration
 
 ### Fixed
 

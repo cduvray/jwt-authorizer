@@ -2,7 +2,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use jwt_authorizer::{AuthError, JwtAuthorizer, JwtClaims};
+use jwt_authorizer::{AuthError, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
 use serde::Deserialize;
 use std::{fmt::Display, net::SocketAddr};
 use tower_http::trace::TraceLayer;
@@ -30,7 +30,9 @@ async fn main() {
     // User is a struct deserializable from JWT claims representing the authorized user
     let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::
         from_jwks_url("http://localhost:3000/oidc/jwks")
-        .with_check(claim_checker);
+         // .no_refresh()
+         .refresh(Refresh {strategy: RefreshStrategy::Interval, ..Default::default()})
+         .check(claim_checker);
 
     let oidc = Router::new()
         .route("/authorize", post(oidc_provider::authorize))

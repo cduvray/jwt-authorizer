@@ -1,11 +1,11 @@
-use std::{io::Read, time::Duration};
+use std::io::Read;
 
 use jsonwebtoken::{decode, decode_header, jwk::JwkSet, DecodingKey, TokenData, Validation};
 use serde::de::DeserializeOwned;
 
 use crate::{
     error::{AuthError, InitError},
-    jwks::{key_store_manager::KeyStoreManager, KeySource},
+    jwks::{key_store_manager::KeyStoreManager, KeySource}, Refresh,
 };
 
 pub trait ClaimsChecker<C> {
@@ -66,7 +66,7 @@ where
         })
     }
 
-    pub fn from(key_source_type: &KeySourceType, claims_checker: Option<FnClaimsChecker<C>>) -> Result<Authorizer<C>, InitError> {
+    pub(crate) fn from(key_source_type: &KeySourceType, claims_checker: Option<FnClaimsChecker<C>>) -> Result<Authorizer<C>, InitError> {
         let key = match key_source_type {
             KeySourceType::RSA(path) => DecodingKey::from_rsa_pem(&read_data(path.as_str())?)?,
             KeySourceType::EC(path) => DecodingKey::from_ec_der(&read_data(path.as_str())?),
@@ -81,8 +81,8 @@ where
         })
     }
 
-    pub fn from_jwks_url(url: &str, claims_checker: Option<FnClaimsChecker<C>>) -> Result<Authorizer<C>, InitError> {
-        let key_store_manager = KeyStoreManager::with_refresh_interval(url, Duration::from_secs(60));
+    pub(crate)  fn from_jwks_url(url: &str, claims_checker: Option<FnClaimsChecker<C>>, refresh: Refresh) -> Result<Authorizer<C>, InitError> {
+        let key_store_manager = KeyStoreManager::new(url, refresh);
         Ok(Authorizer {
             key_source: KeySource::KeyStoreSource(key_store_manager),
             claims_checker,

@@ -2,7 +2,17 @@
 
 JWT authoriser Layer for Axum.
 
-Example:
+## Features
+
+- JWT token verification (Bearer)
+    - Algoritms: ECDSA, RSA, EdDSA, HS
+- JWKS endpoint support
+    - Configurable refresh
+- Claims extraction
+- Claims checker
+
+
+## Usage Example
 
 ```rust
     use jwt_authorizer::{AuthError, JwtAuthorizer, JwtClaims};
@@ -55,8 +65,14 @@ Example:
     }
 
     let authorizer = JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub")
-                    .with_check(
+                    .check(
                         |claims: &User| claims.sub.contains('@') // must be an email
                     );
 ```
 
+## JWKS Refresh
+
+By default the jwks keys are reloaded when a request token is signed with a key (`kid` jwt header) that is not present in the store (a minimal intervale between 2 reloads is 10s by default, can be configured). 
+
+- `JwtAuthorizer::no_refresh()` configures one and unique reload of jwks keys
+- `JwtAuthorizer::refresh(refresh_configuration)` allows to define a finer configuration for jwks refreshing, for more details see the documentation of `Refresh` struct.

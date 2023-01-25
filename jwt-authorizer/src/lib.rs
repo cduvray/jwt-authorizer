@@ -7,6 +7,7 @@ use serde::de::DeserializeOwned;
 
 pub use self::error::AuthError;
 pub use layer::JwtAuthorizer;
+pub use jwks::key_store_manager::{Refresh, RefreshStrategy};
 
 pub mod authorizer;
 pub mod error;
