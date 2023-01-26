@@ -7,22 +7,22 @@ authors = ["cduvray <c_duvray@proton.me>"]
 license = "MIT"
 readme = "docs/README.md"
 repository = "https://github.com/cduvray/jwt-authorizer"
-keywords = ["jwt","axum","authorisation"]
+keywords = ["jwt","axum","authorisation","jwks"]
 
 [dependencies]
-axum = { version = "0.6.1", features = ["headers"] }
-futures-util = "0.3.25"
-futures-core = "0.3.25"
+axum = { version = "0.6", features = ["headers"] }
+futures-util = "0.3"
+futures-core = "0.3"
 headers = "0.3"
-jsonwebtoken = "8.2.0"
-http = "0.2.8"
-pin-project = "1.0.12"
-reqwest = { version = "0.11.13", features = ["json"] }
+jsonwebtoken = "8.2"
+http = "0.2"
+pin-project = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "1.0.37"
+thiserror = "1.0.38"
 tokio = { version = "1.0", features = ["full"] }
-tower-http = { version = "0.3.4", features = ["trace", "auth"] }
+tower-http = { version = "0.3", features = ["trace", "auth"] }
 tower-layer = "0.3"
 tower-service = "0.3"
 tracing = "0.1"
