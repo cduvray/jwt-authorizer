@@ -51,12 +51,14 @@ pub enum KeySourceType {
     ED(String),
     Secret(&'static str),
     Jwks(String),
+    Discovery(String),
 }
 
 impl<C> Authorizer<C>
 where
     C: DeserializeOwned + Clone + Send + Sync,
 {
+    // TODO: expose it in JwtAuthorizer
     pub fn from_jwks(jwks: &str, claims_checker: Option<FnClaimsChecker<C>>) -> Result<Authorizer<C>, AuthError> {
         let set: JwkSet = serde_json::from_str(jwks)?;
         let k = DecodingKey::from_jwk(&set.keys[0])?;
@@ -76,7 +78,7 @@ where
             KeySourceType::EC(path) => DecodingKey::from_ec_der(&read_data(path.as_str())?),
             KeySourceType::ED(path) => DecodingKey::from_ed_der(&read_data(path.as_str())?),
             KeySourceType::Secret(secret) => DecodingKey::from_secret(secret.as_bytes()),
-            KeySourceType::Jwks(_) => panic!("bug: use from_jwks_url() to initialise Authorizer"), // should never hapen
+            _ => panic!("bug: use from_jwks_url() or from_oidc() to initialise Authorizer"), // should never hapen
         };
 
         Ok(Authorizer {

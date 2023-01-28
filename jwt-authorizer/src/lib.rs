@@ -13,6 +13,7 @@ pub mod authorizer;
 pub mod error;
 pub mod jwks;
 pub mod layer;
+mod oidc;
 
 /// Claims serialized using T
 #[derive(Debug, Clone, Copy, Default)]

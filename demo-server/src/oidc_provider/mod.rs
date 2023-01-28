@@ -4,7 +4,8 @@ use axum::{
     headers::{authorization::Bearer, Authorization},
     http::{request::Parts, StatusCode},
     response::{IntoResponse, Response},
-    Json,
+    routing::{get, post},
+    Json, Router,
 };
 use josekit::jwk::{
     alg::{ec::EcCurve, ec::EcKeyPair, ed::EdKeyPair, rsa::RsaKeyPair},
@@ -14,13 +15,15 @@ use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, 
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::fmt::Display;
+use std::{fmt::Display, net::SocketAddr, thread, time::Duration};
 
 pub static KEYS: Lazy<Keys> = Lazy::new(|| {
     //let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
     // Keys::new("xxxxx".as_bytes())
     Keys::load_rsa()
 });
+
+const ISSUER_URI: &str = "http://localhost:3001";
 
 pub struct Keys {
     pub alg: Algorithm,
@@ -36,6 +39,23 @@ impl Keys {
             decoding: DecodingKey::from_rsa_pem(include_bytes!("../../../config/jwtRS256.key.pub")).unwrap(),
         }
     }
+}
+
+/// OpenId Connect discovery (simplified for test purposes)
+#[derive(Serialize, Clone)]
+pub struct OidcDiscovery {
+    issuer: String,
+    jwks_uri: String,
+    authorization_endpoint: String,
+}
+
+pub async fn discovery() -> Json<Value> {
+    let d = OidcDiscovery {
+        issuer: ISSUER_URI.to_owned(),
+        jwks_uri: format!("{}/jwks", ISSUER_URI),
+        authorization_endpoint: format!("{}/authorize", ISSUER_URI),
+    };
+    Json(json!(d))
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
@@ -108,6 +128,7 @@ fn build_header(alg: Algorithm, kid: &str) -> Header {
     }
 }
 
+/// issues test tokens (this is not a standard endpoint)
 pub async fn tokens() -> Json<Value> {
     let claims = Claims {
         sub: "b@b.com".to_owned(),
@@ -148,6 +169,24 @@ pub async fn authorize(Json(payload): Json<AuthPayload>) -> Result<Json<AuthBody
 
     // Send the authorized token
     Ok(Json(AuthBody::new(token)))
+}
+
+/// exposes oidc "like" endpoints (this is for test purposes)
+pub fn run_server() {
+    // oidc "like" endpoints for test purposes
+    let app = Router::new()
+        .route("/.well-known/openid-configuration", get(discovery))
+        .route("/authorize", post(authorize))
+        .route("/jwks", get(jwks))
+        .route("/tokens", get(tokens));
+
+    tokio::spawn(async move {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
+        tracing::info!("oidc provider starting on: {}", addr);
+        axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
+    });
+
+    thread::sleep(Duration::from_millis(200)); // waiting oidc to start
 }
 
 #[derive(Debug, Serialize, Deserialize)]

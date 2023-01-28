@@ -1,8 +1,5 @@
-use axum::{
-    routing::{get, post},
-    Router,
-};
-use jwt_authorizer::{AuthError, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
+use axum::{routing::get, Router};
+use jwt_authorizer::{error::InitError, AuthError, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
 use serde::Deserialize;
 use std::{fmt::Display, net::SocketAddr};
 use tower_http::trace::TraceLayer;
@@ -12,7 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod oidc_provider;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), InitError> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG").unwrap_or_else(|_| "info,axum_poc=debug,tower_http=debug".into()),
@@ -26,9 +23,13 @@ async fn main() {
         u.sub.contains('@') // must be an email
     }
 
+    // starting oidc provider (discovery is needed by from_oidc())
+    oidc_provider::run_server();
+
     // First let's create an authorizer builder from a JWKS Endpoint
     // User is a struct deserializable from JWT claims representing the authorized user
-    let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_jwks_url("http://localhost:3000/oidc/jwks")
+    // let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc("https://accounts.google.com/")
+    let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc("http://localhost:3001")
         // .no_refresh()
         .refresh(Refresh {
             strategy: RefreshStrategy::Interval,
@@ -36,18 +37,15 @@ async fn main() {
         })
         .check(claim_checker);
 
-    let oidc = Router::new()
-        .route("/authorize", post(oidc_provider::authorize))
-        .route("/jwks", get(oidc_provider::jwks))
-        .route("/tokens", get(oidc_provider::tokens));
-
+    // actual router demo
     let api = Router::new()
         .route("/protected", get(protected))
-        .layer(jwt_auth.layer().unwrap());
+        // adding the authorizer layer
+        .layer(jwt_auth.layer().await?);
     // .layer(jwt_auth.check_claims(|_: User| true));
 
     let app = Router::new()
-        .nest("/oidc/", oidc)
+        // actual protected apis
         .nest("/api", api)
         .layer(TraceLayer::new_for_http());
 
@@ -55,6 +53,8 @@ async fn main() {
     tracing::info!("listening on {}", addr);
 
     axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
+
+    Ok(())
 }
 
 async fn protected(JwtClaims(user): JwtClaims<User>) -> Result<String, AuthError> {

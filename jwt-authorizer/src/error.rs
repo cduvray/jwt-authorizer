@@ -19,6 +19,9 @@ pub enum InitError {
 
     #[error(transparent)]
     KeyFileDecodingError(#[from] jsonwebtoken::errors::Error),
+
+    #[error("Builder Error {0}")]
+    DiscoveryError(String),
 }
 
 #[derive(Debug, Error)]

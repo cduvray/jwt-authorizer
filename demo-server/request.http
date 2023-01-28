@@ -24,12 +24,16 @@ GET http://localhost:3000/api/protected
 Content-Type: application/json
 Authorization: Bearer blablabla.xxxx.xxxx
 
+### discovery
+GET http://localhost:3001/.well-known/openid-configuration
+Content-Type: application/json
 
-###
-GET http://localhost:3000/oidc/jwks
+
+### jwks
+GET http://localhost:3001/jwks
 Content-Type: application/json
 
 
 ###
-GET http://localhost:3000/oidc/tokens
+GET http://localhost:3001/tokens
 Content-Type: application/json

@@ -17,7 +17,7 @@ use tower_service::Service;
 use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
 use crate::error::InitError;
 use crate::jwks::key_store_manager::Refresh;
-use crate::{AuthError, RefreshStrategy};
+use crate::{oidc, AuthError, RefreshStrategy};
 
 /// Authorizer Layer builder
 ///
@@ -37,7 +37,16 @@ impl<C> JwtAuthorizer<C>
 where
     C: Clone + DeserializeOwned + Send + Sync,
 {
-    /// Build Authorizer Layer from a JWKS endpoint
+    /// Builds Authorizer Layer from a OpenId Connect discover metadata
+    pub fn from_oidc(issuer: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: Some(KeySourceType::Discovery(issuer.to_string())),
+            refresh: Default::default(),
+            claims_checker: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a JWKS endpoint
     pub fn from_jwks_url(url: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::Jwks(url.to_owned())),
@@ -46,7 +55,7 @@ where
         }
     }
 
-    /// Build Authorizer Layer from a RSA PEM file
+    /// Builds Authorizer Layer from a RSA PEM file
     pub fn from_rsa_pem(path: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::RSA(path.to_owned())),
@@ -55,7 +64,7 @@ where
         }
     }
 
-    /// Build Authorizer Layer from a EC PEM file
+    /// Builds Authorizer Layer from a EC PEM file
     pub fn from_ec_pem(path: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::EC(path.to_owned())),
@@ -64,7 +73,7 @@ where
         }
     }
 
-    /// Build Authorizer Layer from a EC PEM file
+    /// Builds Authorizer Layer from a EC PEM file
     pub fn from_ed_pem(path: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::ED(path.to_owned())),
@@ -73,7 +82,7 @@ where
         }
     }
 
-    /// Build Authorizer Layer from a secret phrase
+    /// Builds Authorizer Layer from a secret phrase
     pub fn from_secret(secret: &'static str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: Some(KeySourceType::Secret(secret)),
@@ -82,7 +91,7 @@ where
         }
     }
 
-    /// refresh configuration for jwk store
+    /// Refreshes configuration for jwk store
     pub fn refresh(mut self, refresh: Refresh) -> JwtAuthorizer<C> {
         if self.refresh.is_some() {
             tracing::warn!("More than one refresh configuration found!");
@@ -112,7 +121,7 @@ where
     }
 
     /// Build axum layer
-    pub fn layer(&self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+    pub async fn layer(&self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let auth = if let Some(ref key_source_type) = self.key_source_type {
             match key_source_type {
                 KeySourceType::RSA(_) | KeySourceType::EC(_) | KeySourceType::ED(_) | KeySourceType::Secret(_) => {
@@ -123,6 +132,14 @@ where
                     self.claims_checker.clone(),
                     self.refresh.unwrap_or_default(),
                 )?),
+                KeySourceType::Discovery(issuer_url) => {
+                    let jwks_url = oidc::discover_jwks(issuer_url).await?;
+                    Arc::new(Authorizer::from_jwks_url(
+                        &jwks_url,
+                        self.claims_checker.clone(),
+                        self.refresh.unwrap_or_default(),
+                    )?)
+                }
             }
         } else {
             return Err(InitError::BuilderError(
