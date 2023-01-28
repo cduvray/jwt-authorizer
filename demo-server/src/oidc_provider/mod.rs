@@ -46,9 +46,7 @@ struct JwkSet {
 pub async fn jwks() -> Json<Value> {
     // let mut ksmap = serde_json::Map::new();
 
-    let mut kset = JwkSet {
-        keys: Vec::<Jwk>::new(),
-    };
+    let mut kset = JwkSet { keys: Vec::<Jwk>::new() };
 
     let keypair = RsaKeyPair::from_pem(include_bytes!("../../../config/jwtRS256.key")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
@@ -64,19 +62,14 @@ pub async fn jwks() -> Json<Value> {
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair =
-        EcKeyPair::from_pem(include_bytes!("../../../config/ec256-private.pem"), Some(EcCurve::P256)).unwrap();
+    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ec256-private.pem"), Some(EcCurve::P256)).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("key-ec");
     pk.set_algorithm("ES256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair = EcKeyPair::from_pem(
-        include_bytes!("../../../config/private_ecdsa_key.pem"),
-        Some(EcCurve::P256),
-    )
-    .unwrap();
+    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/private_ecdsa_key.pem"), Some(EcCurve::P256)).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("ec01");
     pk.set_algorithm("ES256");
@@ -225,8 +218,8 @@ where
         let TypedHeader(Authorization(bearer)) = TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
             .await
             .map_err(|_| AuthError::InvalidToken)?;
-        let token_data = decode::<Claims>(bearer.token(), &KEYS.decoding, &Validation::default())
-            .map_err(|_| AuthError::InvalidToken)?;
+        let token_data =
+            decode::<Claims>(bearer.token(), &KEYS.decoding, &Validation::default()).map_err(|_| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
     }

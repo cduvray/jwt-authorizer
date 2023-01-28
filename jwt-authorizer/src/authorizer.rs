@@ -5,7 +5,8 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     error::{AuthError, InitError},
-    jwks::{key_store_manager::KeyStoreManager, KeySource}, Refresh,
+    jwks::{key_store_manager::KeyStoreManager, KeySource},
+    Refresh,
 };
 
 pub trait ClaimsChecker<C> {
@@ -66,7 +67,10 @@ where
         })
     }
 
-    pub(crate) fn from(key_source_type: &KeySourceType, claims_checker: Option<FnClaimsChecker<C>>) -> Result<Authorizer<C>, InitError> {
+    pub(crate) fn from(
+        key_source_type: &KeySourceType,
+        claims_checker: Option<FnClaimsChecker<C>>,
+    ) -> Result<Authorizer<C>, InitError> {
         let key = match key_source_type {
             KeySourceType::RSA(path) => DecodingKey::from_rsa_pem(&read_data(path.as_str())?)?,
             KeySourceType::EC(path) => DecodingKey::from_ec_der(&read_data(path.as_str())?),
@@ -81,7 +85,11 @@ where
         })
     }
 
-    pub(crate)  fn from_jwks_url(url: &str, claims_checker: Option<FnClaimsChecker<C>>, refresh: Refresh) -> Result<Authorizer<C>, InitError> {
+    pub(crate) fn from_jwks_url(
+        url: &str,
+        claims_checker: Option<FnClaimsChecker<C>>,
+        refresh: Refresh,
+    ) -> Result<Authorizer<C>, InitError> {
         let key_store_manager = KeyStoreManager::new(url, refresh);
         Ok(Authorizer {
             key_source: KeySource::KeyStoreSource(key_store_manager),

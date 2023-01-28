@@ -28,11 +28,13 @@ async fn main() {
 
     // First let's create an authorizer builder from a JWKS Endpoint
     // User is a struct deserializable from JWT claims representing the authorized user
-    let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::
-        from_jwks_url("http://localhost:3000/oidc/jwks")
-         // .no_refresh()
-         .refresh(Refresh {strategy: RefreshStrategy::Interval, ..Default::default()})
-         .check(claim_checker);
+    let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_jwks_url("http://localhost:3000/oidc/jwks")
+        // .no_refresh()
+        .refresh(Refresh {
+            strategy: RefreshStrategy::Interval,
+            ..Default::default()
+        })
+        .check(claim_checker);
 
     let oidc = Router::new()
         .route("/authorize", post(oidc_provider::authorize))

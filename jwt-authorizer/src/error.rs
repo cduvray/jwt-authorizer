@@ -1,6 +1,7 @@
 use axum::{
+    body::{self, BoxBody, Empty},
     http::StatusCode,
-    response::{IntoResponse, Response}, body::{self, Empty, BoxBody},
+    response::{IntoResponse, Response},
 };
 use http::header;
 use jsonwebtoken::Algorithm;
@@ -47,7 +48,7 @@ pub enum AuthError {
     InvalidClaims(),
 }
 
-fn response_wwwauth(status: StatusCode, bearer: &str) ->  Response<BoxBody> {
+fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
     let mut res = Response::new(body::boxed(Empty::new()));
     *res.status_mut() = status;
     let h = if bearer.is_empty() {
@@ -60,7 +61,7 @@ fn response_wwwauth(status: StatusCode, bearer: &str) ->  Response<BoxBody> {
     res
 }
 
-fn response_500() ->  Response<BoxBody> {
+fn response_500() -> Response<BoxBody> {
     let mut res = Response::new(body::boxed(Empty::new()));
     *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
 
@@ -71,38 +72,44 @@ fn response_500() ->  Response<BoxBody> {
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let resp = match self {
-            AuthError::JwksRefreshError(err) =>  {
+            AuthError::JwksRefreshError(err) => {
                 tracing::error!("AuthErrors::JwksRefreshError: {}", err);
                 response_500()
-            },
-            AuthError::InvalidKey(err) =>  {
-                tracing::error!("AuthErrors::InvalidKey: {}", err);               
+            }
+            AuthError::InvalidKey(err) => {
+                tracing::error!("AuthErrors::InvalidKey: {}", err);
                 response_500()
-            },
+            }
             AuthError::JwksSerialisationError(err) => {
-                tracing::error!("AuthErrors::JwksSerialisationError: {}", err);               
+                tracing::error!("AuthErrors::JwksSerialisationError: {}", err);
                 response_500()
-            },
+            }
             AuthError::InvalidKeyAlg(err) => {
                 debug!("AuthErrors::InvalidKeyAlg: {:?}", err);
-                response_wwwauth(StatusCode::UNAUTHORIZED, "error=\"invalid_token\", error_description=\"invalid key algorithm\"")
-            },
+                response_wwwauth(
+                    StatusCode::UNAUTHORIZED,
+                    "error=\"invalid_token\", error_description=\"invalid key algorithm\"",
+                )
+            }
             AuthError::InvalidKid(err) => {
                 debug!("AuthErrors::InvalidKid: {}", err);
-                response_wwwauth(StatusCode::UNAUTHORIZED, "error=\"invalid_token\", error_description=\"invalid kid\"")
-            },
+                response_wwwauth(
+                    StatusCode::UNAUTHORIZED,
+                    "error=\"invalid_token\", error_description=\"invalid kid\"",
+                )
+            }
             AuthError::InvalidToken(err) => {
                 debug!("AuthErrors::InvalidToken: {}", err);
                 response_wwwauth(StatusCode::UNAUTHORIZED, "error=\"invalid_token\"")
-            },
+            }
             AuthError::MissingToken() => {
                 debug!("AuthErrors::MissingToken");
                 response_wwwauth(StatusCode::UNAUTHORIZED, "")
-            },
+            }
             AuthError::InvalidClaims() => {
                 debug!("AuthErrors::InvalidClaims");
                 response_wwwauth(StatusCode::FORBIDDEN, "error=\"insufficient_scope\"")
-            },
+            }
         };
 
         resp

@@ -6,8 +6,8 @@ use jsonwebtoken::TokenData;
 use serde::de::DeserializeOwned;
 
 pub use self::error::AuthError;
-pub use layer::JwtAuthorizer;
 pub use jwks::key_store_manager::{Refresh, RefreshStrategy};
+pub use layer::JwtAuthorizer;
 
 pub mod authorizer;
 pub mod error;

@@ -1,6 +1,6 @@
 use axum::body::BoxBody;
 use axum::http::Request;
-use axum::response::{Response, IntoResponse};
+use axum::response::{IntoResponse, Response};
 use futures_core::ready;
 use futures_util::future::BoxFuture;
 use headers::authorization::Bearer;
@@ -14,10 +14,10 @@ use std::task::{Context, Poll};
 use tower_layer::Layer;
 use tower_service::Service;
 
-use crate::{AuthError, RefreshStrategy};
 use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
 use crate::error::InitError;
 use crate::jwks::key_store_manager::Refresh;
+use crate::{AuthError, RefreshStrategy};
 
 /// Authorizer Layer builder
 ///
@@ -118,11 +118,11 @@ where
                 KeySourceType::RSA(_) | KeySourceType::EC(_) | KeySourceType::ED(_) | KeySourceType::Secret(_) => {
                     Arc::new(Authorizer::from(key_source_type, self.claims_checker.clone())?)
                 }
-                KeySourceType::Jwks(url) => {
-                    Arc::new(
-                        Authorizer::from_jwks_url(
-                            url.as_str(), self.claims_checker.clone(), self.refresh.unwrap_or_default())?)
-                }
+                KeySourceType::Jwks(url) => Arc::new(Authorizer::from_jwks_url(
+                    url.as_str(),
+                    self.claims_checker.clone(),
+                    self.refresh.unwrap_or_default(),
+                )?),
             }
         } else {
             return Err(InitError::BuilderError(
@@ -162,16 +162,14 @@ where
         Box::pin(async move {
             if let Some(bearer) = bearer_o {
                 match authorizer.check_auth(bearer.token()).await {
-                    Ok(token_data) =>  {
+                    Ok(token_data) => {
                         // Set `token_data` as a request extension so it can be accessed by other
                         // services down the stack.
                         request.extensions_mut().insert(token_data);
-        
+
                         Ok(request)
-                    },
-                    Err(err) => { 
-                        Err(err.into_response())
                     }
+                    Err(err) => Err(err.into_response()),
                 }
             } else {
                 Err(AuthError::MissingToken().into_response())
