@@ -57,7 +57,7 @@ fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
     let h = if bearer.is_empty() {
         "Bearer".to_owned()
     } else {
-        format!("Bearer {}", bearer)
+        format!("Bearer {bearer}")
     };
     res.headers_mut().insert(header::WWW_AUTHENTICATE, h.parse().unwrap());
 

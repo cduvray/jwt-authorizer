@@ -9,7 +9,7 @@ pub struct OidcDiscovery {
 }
 
 pub async fn discover_jwks(issuer: &str) -> Result<String, InitError> {
-    let discovery_url = format!("{}/.well-known/openid-configuration", issuer);
+    let discovery_url = format!("{issuer}/.well-known/openid-configuration");
     reqwest::Client::new()
         .get(discovery_url)
         .send()

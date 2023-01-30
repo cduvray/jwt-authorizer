@@ -1,8 +1,5 @@
-###
-POST http://localhost:3000/oidc/authorize
-Content-Type: application/json
-
-{"client_id":"foo","client_secret":"bar"}
+### Public URL
+GET http://localhost:3000/public
 
 ### Protected RSA
 GET http://localhost:3000/api/protected
@@ -19,7 +16,11 @@ GET http://localhost:3000/api/protected
 Content-Type: application/json
 Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSIsImtpZCI6ImtleS1lZCJ9.eyJzdWIiOiJiQGIuY29tIiwiZXhwIjoyMDAwMDAwMDAwfQ.XAx9msioheXEH1XUEIWMHGBg25JOpBHqcgL_ou_S3fwVht2TbKRiDZ4G6ZyEtn57hCbOy250zTD_g0EbaMGwAg
 
-###
+### 401 (no token)
+GET http://localhost:3000/api/protected
+Content-Type: application/json
+
+### 401 (invalid_token)
 GET http://localhost:3000/api/protected
 Content-Type: application/json
 Authorization: Bearer blablabla.xxxx.xxxx
@@ -28,12 +29,10 @@ Authorization: Bearer blablabla.xxxx.xxxx
 GET http://localhost:3001/.well-known/openid-configuration
 Content-Type: application/json
 
-
 ### jwks
 GET http://localhost:3001/jwks
 Content-Type: application/json
 
-
-###
+### Test tokens
 GET http://localhost:3001/tokens
 Content-Type: application/json
