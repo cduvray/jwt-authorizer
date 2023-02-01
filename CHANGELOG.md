@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.6.0 (2023-02-05)
+
+### Added
+
+- JwtAuthorizer::from_oidc(issuer_uri) - building from oidc discovery page
+
+### Chnaged
+
+- JwtAuthorizer::layer() becomes async
+
+### Minor Changes
+
+- demo-server refactoring
+
 ## 0.5.0 - (2023-1-28)
 
 ### Changed
@@ -47,9 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 0.3.0 - (2023-1-13)
 
-### Added 
+### Added
 
-- building the authorizer layer from rsa, ec, ed PEM files and from secret phrase (9bd99b2a) 
+- building the authorizer layer from rsa, ec, ed PEM files and from secret phrase (9bd99b2a)
 
 ## 0.2.0 - (2023-1-10)
 
