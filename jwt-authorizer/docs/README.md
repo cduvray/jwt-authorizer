@@ -15,11 +15,13 @@ JWT authoriser Layer for Axum.
 ## Usage Example
 
 ```rust
-    use jwt_authorizer::{AuthError, JwtAuthorizer, JwtClaims};
-    use axum::{routing::get, Router};
-    use serde::Deserialize;
+# use jwt_authorizer::{AuthError, JwtAuthorizer, JwtClaims};
+# use axum::{routing::get, Router};
+# use serde::Deserialize;
 
-    // Authorized entity, struct deserializable from JWT claims
+# async {
+
+    // struct representing the authorized caller, deserializable from JWT claims
     #[derive(Debug, Deserialize, Clone)]
     struct User {
         sub: String,
@@ -39,10 +41,9 @@ JWT authoriser Layer for Axum.
         Ok(format!("Welcome: {}", user.sub))
     }
 
-    # async {
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
         .serve(app.into_make_service()).await.expect("server failed");
-    # };
+# };
 ```
 
 ## ClaimsChecker

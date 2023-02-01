@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use crate::{
     error::{AuthError, InitError},
     jwks::{key_store_manager::KeyStoreManager, KeySource},
-    Refresh,
+    oidc, Refresh,
 };
 
 pub trait ClaimsChecker<C> {
@@ -51,6 +51,7 @@ pub enum KeySourceType {
     ED(String),
     Secret(&'static str),
     Jwks(String),
+    JwksString(String), // TODO: expose JwksString in JwtAuthorizer or remove it
     Discovery(String),
 }
 
@@ -58,44 +59,65 @@ impl<C> Authorizer<C>
 where
     C: DeserializeOwned + Clone + Send + Sync,
 {
-    // TODO: expose it in JwtAuthorizer
-    pub fn from_jwks(jwks: &str, claims_checker: Option<FnClaimsChecker<C>>) -> Result<Authorizer<C>, AuthError> {
-        let set: JwkSet = serde_json::from_str(jwks)?;
-        let k = DecodingKey::from_jwk(&set.keys[0])?;
-
-        Ok(Authorizer {
-            key_source: KeySource::DecodingKeySource(k),
-            claims_checker,
-        })
-    }
-
-    pub(crate) fn from(
+    pub(crate) async fn build(
         key_source_type: &KeySourceType,
         claims_checker: Option<FnClaimsChecker<C>>,
+        refresh: Option<Refresh>,
     ) -> Result<Authorizer<C>, InitError> {
-        let key = match key_source_type {
-            KeySourceType::RSA(path) => DecodingKey::from_rsa_pem(&read_data(path.as_str())?)?,
-            KeySourceType::EC(path) => DecodingKey::from_ec_der(&read_data(path.as_str())?),
-            KeySourceType::ED(path) => DecodingKey::from_ed_der(&read_data(path.as_str())?),
-            KeySourceType::Secret(secret) => DecodingKey::from_secret(secret.as_bytes()),
-            _ => panic!("bug: use from_jwks_url() or from_oidc() to initialise Authorizer"), // should never hapen
-        };
-
-        Ok(Authorizer {
-            key_source: KeySource::DecodingKeySource(key),
-            claims_checker,
-        })
-    }
-
-    pub(crate) fn from_jwks_url(
-        url: &str,
-        claims_checker: Option<FnClaimsChecker<C>>,
-        refresh: Refresh,
-    ) -> Result<Authorizer<C>, InitError> {
-        let key_store_manager = KeyStoreManager::new(url, refresh);
-        Ok(Authorizer {
-            key_source: KeySource::KeyStoreSource(key_store_manager),
-            claims_checker,
+        Ok(match key_source_type {
+            KeySourceType::RSA(path) => {
+                let key = DecodingKey::from_rsa_pem(&read_data(path.as_str())?)?;
+                Authorizer {
+                    key_source: KeySource::DecodingKeySource(key),
+                    claims_checker,
+                }
+            }
+            KeySourceType::EC(path) => {
+                let key = DecodingKey::from_ec_der(&read_data(path.as_str())?);
+                Authorizer {
+                    key_source: KeySource::DecodingKeySource(key),
+                    claims_checker,
+                }
+            }
+            KeySourceType::ED(path) => {
+                let key = DecodingKey::from_ed_der(&read_data(path.as_str())?);
+                Authorizer {
+                    key_source: KeySource::DecodingKeySource(key),
+                    claims_checker,
+                }
+            }
+            KeySourceType::Secret(secret) => {
+                let key = DecodingKey::from_secret(secret.as_bytes());
+                Authorizer {
+                    key_source: KeySource::DecodingKeySource(key),
+                    claims_checker,
+                }
+            }
+            KeySourceType::JwksString(jwks_str) => {
+                // TODO: expose it in JwtAuthorizer or remove
+                let set: JwkSet = serde_json::from_str(jwks_str)?;
+                // TODO: replace [0] by kid/alg search
+                let k = DecodingKey::from_jwk(&set.keys[0])?;
+                Authorizer {
+                    key_source: KeySource::DecodingKeySource(k),
+                    claims_checker,
+                }
+            }
+            KeySourceType::Jwks(url) => {
+                let key_store_manager = KeyStoreManager::new(url, refresh.unwrap_or_default());
+                Authorizer {
+                    key_source: KeySource::KeyStoreSource(key_store_manager),
+                    claims_checker,
+                }
+            }
+            KeySourceType::Discovery(issuer_url) => {
+                let jwks_url = oidc::discover_jwks(issuer_url).await?;
+                let key_store_manager = KeyStoreManager::new(&jwks_url, refresh.unwrap_or_default());
+                Authorizer {
+                    key_source: KeySource::KeyStoreSource(key_store_manager),
+                    claims_checker,
+                }
+            }
         })
     }
 
@@ -126,7 +148,9 @@ mod tests {
     #[tokio::test]
     async fn from_secret() {
         let h = Header::new(Algorithm::HS256);
-        let a = Authorizer::<Value>::from(&KeySourceType::Secret("xxxxxx"), None).unwrap();
+        let a = Authorizer::<Value>::build(&KeySourceType::Secret("xxxxxx"), None, None)
+            .await
+            .unwrap();
         let k = a.key_source.get_key(h);
         assert!(k.await.is_ok());
     }
@@ -143,29 +167,37 @@ mod tests {
                     "e": "AQAB"
                 }]}
         "#;
-        let a = Authorizer::<Value>::from_jwks(jwks, None).unwrap();
+        let a = Authorizer::<Value>::build(&KeySourceType::JwksString(jwks.to_owned()), None, None)
+            .await
+            .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::RS256));
         assert!(k.await.is_ok());
     }
 
     #[tokio::test]
     async fn from_file() {
-        let a = Authorizer::<Value>::from(&KeySourceType::RSA("../config/jwtRS256.key.pub".to_owned()), None).unwrap();
+        let a = Authorizer::<Value>::build(&KeySourceType::RSA("../config/jwtRS256.key.pub".to_owned()), None, None)
+            .await
+            .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::RS256));
         assert!(k.await.is_ok());
 
-        let a = Authorizer::<Value>::from(&KeySourceType::EC("../config/ec256-public.pem".to_owned()), None).unwrap();
+        let a = Authorizer::<Value>::build(&KeySourceType::EC("../config/ec256-public.pem".to_owned()), None, None)
+            .await
+            .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::ES256));
         assert!(k.await.is_ok());
 
-        let a = Authorizer::<Value>::from(&KeySourceType::ED("../config/ed25519-public.pem".to_owned()), None).unwrap();
+        let a = Authorizer::<Value>::build(&KeySourceType::ED("../config/ed25519-public.pem".to_owned()), None, None)
+            .await
+            .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::EdDSA));
         assert!(k.await.is_ok());
     }
 
     #[tokio::test]
     async fn from_file_errors() {
-        let a = Authorizer::<Value>::from(&KeySourceType::RSA("./config/does-not-exist.pem".to_owned()), None);
+        let a = Authorizer::<Value>::build(&KeySourceType::RSA("./config/does-not-exist.pem".to_owned()), None, None).await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }

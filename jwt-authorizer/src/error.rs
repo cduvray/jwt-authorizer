@@ -22,6 +22,9 @@ pub enum InitError {
 
     #[error("Builder Error {0}")]
     DiscoveryError(String),
+
+    #[error("Jwks Parsing Error {0}")]
+    JwksParsingError(#[from] serde_json::Error),
 }
 
 #[derive(Debug, Error)]
