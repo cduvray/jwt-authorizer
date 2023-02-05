@@ -2,6 +2,7 @@ use jsonwebtoken::{
     jwk::{Jwk, JwkSet},
     Algorithm, DecodingKey,
 };
+use reqwest::Url;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -47,7 +48,7 @@ impl Default for Refresh {
 
 #[derive(Clone)]
 pub struct KeyStoreManager {
-    key_url: String,
+    key_url: Url,
     /// in case of fail loading (error or key not found), minimal interval
     refresh: Refresh,
     keystore: Arc<Mutex<KeyStore>>,
@@ -63,9 +64,9 @@ pub struct KeyStore {
 }
 
 impl KeyStoreManager {
-    pub(crate) fn new(url: &str, refresh: Refresh) -> KeyStoreManager {
+    pub(crate) fn new(key_url: Url, refresh: Refresh) -> KeyStoreManager {
         KeyStoreManager {
-            key_url: url.to_owned(),
+            key_url,
             refresh,
             keystore: Arc::new(Mutex::new(KeyStore {
                 jwks: JwkSet { keys: vec![] },
@@ -164,9 +165,9 @@ impl KeyStore {
         }
     }
 
-    async fn refresh(&mut self, key_url: &str, qparam: &[(&str, &str)]) -> Result<(), AuthError> {
+    async fn refresh(&mut self, key_url: &Url, qparam: &[(&str, &str)]) -> Result<(), AuthError> {
         reqwest::Client::new()
-            .get(key_url)
+            .get(key_url.as_ref())
             .query(qparam)
             .send()
             .await
@@ -212,6 +213,7 @@ mod tests {
 
     use jsonwebtoken::Algorithm;
     use jsonwebtoken::{jwk::Jwk, Header};
+    use reqwest::Url;
     use wiremock::{
         matchers::{method, path},
         Mock, MockServer, ResponseTemplate,
@@ -330,7 +332,7 @@ mod tests {
         .await;
 
         let ksm = KeyStoreManager::new(
-            &mock_server.uri(),
+            Url::parse(&mock_server.uri()).unwrap(),
             Refresh {
                 strategy: RefreshStrategy::Interval,
                 refresh_interval: Duration::from_secs(3000),
@@ -359,7 +361,7 @@ mod tests {
         .await;
 
         let mut ksm = KeyStoreManager::new(
-            &mock_server.uri(),
+            Url::parse(&mock_server.uri()).unwrap(),
             Refresh {
                 strategy: RefreshStrategy::KeyNotFound,
                 ..Default::default()
@@ -435,7 +437,7 @@ mod tests {
         .await;
 
         let ksm = KeyStoreManager::new(
-            &mock_server.uri(),
+            Url::parse(&mock_server.uri()).unwrap(),
             Refresh {
                 strategy: RefreshStrategy::NoRefresh,
                 ..Default::default()

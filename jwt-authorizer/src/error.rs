@@ -23,6 +23,9 @@ pub enum InitError {
     #[error("Builder Error {0}")]
     DiscoveryError(String),
 
+    #[error("Builder Error {0}")]
+    JwksUrlError(String),
+
     #[error("Jwks Parsing Error {0}")]
     JwksParsingError(#[from] serde_json::Error),
 }
@@ -74,7 +77,7 @@ fn response_500() -> Response<BoxBody> {
     res
 }
 
-/// (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)  
+/// (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let resp = match self {

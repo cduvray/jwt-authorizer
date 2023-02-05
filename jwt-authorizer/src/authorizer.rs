@@ -1,6 +1,7 @@
 use std::io::Read;
 
 use jsonwebtoken::{decode, decode_header, jwk::JwkSet, DecodingKey, TokenData, Validation};
+use reqwest::Url;
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -104,15 +105,18 @@ where
                 }
             }
             KeySourceType::Jwks(url) => {
-                let key_store_manager = KeyStoreManager::new(url, refresh.unwrap_or_default());
+                let jwks_url = Url::parse(url).map_err(|e| InitError::JwksUrlError(e.to_string()))?;
+                let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default());
                 Authorizer {
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
                 }
             }
             KeySourceType::Discovery(issuer_url) => {
-                let jwks_url = oidc::discover_jwks(issuer_url).await?;
-                let key_store_manager = KeyStoreManager::new(&jwks_url, refresh.unwrap_or_default());
+                let jwks_url = Url::parse(&oidc::discover_jwks(issuer_url).await?)
+                    .map_err(|e| InitError::JwksUrlError(e.to_string()))?;
+
+                let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default());
                 Authorizer {
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
@@ -146,7 +150,7 @@ mod tests {
     use super::{Authorizer, KeySourceType};
 
     #[tokio::test]
-    async fn from_secret() {
+    async fn build_from_secret() {
         let h = Header::new(Algorithm::HS256);
         let a = Authorizer::<Value>::build(&KeySourceType::Secret("xxxxxx"), None, None)
             .await
@@ -156,7 +160,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn from_jwks() {
+    async fn build_from_jwks_string() {
         let jwks = r#"
                 {"keys": [{
                     "kid": "1",
@@ -175,7 +179,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn from_file() {
+    async fn build_from_file() {
         let a = Authorizer::<Value>::build(&KeySourceType::RSA("../config/jwtRS256.key.pub".to_owned()), None, None)
             .await
             .unwrap();
@@ -196,8 +200,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn from_file_errors() {
+    async fn build_file_errors() {
         let a = Authorizer::<Value>::build(&KeySourceType::RSA("./config/does-not-exist.pem".to_owned()), None, None).await;
+        println!("{:?}", a.as_ref().err());
+        assert!(a.is_err());
+    }
+
+    #[tokio::test]
+    async fn build_jwks_url_error() {
+        let a = Authorizer::<Value>::build(&&KeySourceType::Jwks("://xxxx".to_owned()), None, None).await;
+        println!("{:?}", a.as_ref().err());
+        assert!(a.is_err());
+    }
+
+    #[tokio::test]
+    async fn build_discovery_url_error() {
+        let a = Authorizer::<Value>::build(&&KeySourceType::Discovery("://xxxx".to_owned()), None, None).await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }
