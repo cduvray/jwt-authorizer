@@ -726,6 +726,7 @@ dependencies = [
  "http",
  "hyper",
  "jsonwebtoken",
+ "lazy_static",
  "pin-project",
  "reqwest",
  "serde",

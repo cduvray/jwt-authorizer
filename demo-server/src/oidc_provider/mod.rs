@@ -37,42 +37,42 @@ async fn jwks() -> Json<Value> {
 
     let keypair = RsaKeyPair::from_pem(include_bytes!("../../../config/jwtRS256.key")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
-    pk.set_key_id("key-rsa");
+    pk.set_key_id("rsa01");
     pk.set_algorithm("RS256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
     let keypair = RsaKeyPair::from_pem(include_bytes!("../../../config/private_rsa_key_pkcs8.pem")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
-    pk.set_key_id("rsa01");
+    pk.set_key_id("rsa02");
     pk.set_algorithm("RS256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
     let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ec256-private.pem"), Some(EcCurve::P256)).unwrap();
     let mut pk = keypair.to_jwk_public_key();
-    pk.set_key_id("key-ec");
+    pk.set_key_id("ec01");
     pk.set_algorithm("ES256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
     let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/private_ecdsa_key.pem"), Some(EcCurve::P256)).unwrap();
     let mut pk = keypair.to_jwk_public_key();
-    pk.set_key_id("ec01");
+    pk.set_key_id("ec02");
     pk.set_algorithm("ES256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
     let keypair = EdKeyPair::from_pem(include_bytes!("../../../config/ed25519-private.pem")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
-    pk.set_key_id("key-ed");
+    pk.set_key_id("ed01");
     pk.set_algorithm("EdDSA");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
     let keypair = EdKeyPair::from_pem(include_bytes!("../../../config/private_ed25519_key.pem")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
-    pk.set_key_id("ed01");
+    pk.set_key_id("ed02");
     pk.set_algorithm("EdDSA");
     pk.set_key_use("sig");
     kset.keys.push(pk);
@@ -114,18 +114,27 @@ pub async fn tokens() -> Json<Value> {
         nbf: 1516239022, // Jan 2018
     };
 
-    let rsa_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/jwtRS256.key")).unwrap();
-    let ec_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ec256-private.pem")).unwrap();
-    let ed_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private.pem")).unwrap();
+    let rsa1_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/jwtRS256.key")).unwrap();
+    let rsa2_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/private_rsa_key_pkcs8.pem")).unwrap();
+    let ec1_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ec256-private.pem")).unwrap();
+    let ec2_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/private_ecdsa_key.pem")).unwrap();
+    let ed1_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private.pem")).unwrap();
+    let ed2_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private.pem")).unwrap();
 
-    let rsa_token = encode(&build_header(Algorithm::RS256, "key-rsa"), &claims, &rsa_key).unwrap();
-    let ec_token = encode(&build_header(Algorithm::ES256, "key-ec"), &claims, &ec_key).unwrap();
-    let ed_token = encode(&build_header(Algorithm::EdDSA, "key-ed"), &claims, &ed_key).unwrap();
+    let rsa1_token = encode(&build_header(Algorithm::RS256, "rsa01"), &claims, &rsa1_key).unwrap();
+    let rsa2_token = encode(&build_header(Algorithm::RS256, "rsa02"), &claims, &rsa2_key).unwrap();
+    let ec1_token = encode(&build_header(Algorithm::ES256, "ec01"), &claims, &ec1_key).unwrap();
+    let ec2_token = encode(&build_header(Algorithm::ES256, "ec02"), &claims, &ec2_key).unwrap();
+    let ed1_token = encode(&build_header(Algorithm::EdDSA, "ed01"), &claims, &ed1_key).unwrap();
+    let ed2_token = encode(&build_header(Algorithm::EdDSA, "ed02"), &claims, &ed2_key).unwrap();
 
     Json(json!({
-        "rsa": rsa_token,
-        "ec": ec_token,
-        "ed": ed_token
+        "rsa01": rsa1_token,
+        "rsa02": rsa2_token,
+        "ec01": ec1_token,
+        "ec02": ec2_token,
+        "ed01": ed1_token,
+        "ed02": ed2_token,
     }))
 }
 
