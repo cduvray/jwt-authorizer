@@ -43,7 +43,7 @@ mod tests {
 
     #[tokio::test]
     async fn protected_without_jwt() {
-        let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub");
+        let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem");
 
         let response = app(jwt_auth)
             .await
@@ -63,7 +63,7 @@ mod tests {
 
     #[tokio::test]
     async fn protected_with_jwt() {
-        let response = make_proteced_request(JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub"), JWT_RSA_OK).await;
+        let response = make_proteced_request(JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem"), JWT_RSA_OK).await;
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -73,7 +73,7 @@ mod tests {
 
     #[tokio::test]
     async fn protected_with_bad_jwt() {
-        let response = make_proteced_request(JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub"), "xxx.xxx.xxx").await;
+        let response = make_proteced_request(JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem"), "xxx.xxx.xxx").await;
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         // TODO: check error code (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
@@ -82,7 +82,7 @@ mod tests {
     #[tokio::test]
     async fn protected_with_claims_check() {
         let rsp_ok = make_proteced_request(
-            JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub").check(|_| true),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").check(|_| true),
             JWT_RSA_OK,
         )
         .await;
@@ -90,7 +90,7 @@ mod tests {
         assert_eq!(rsp_ok.status(), StatusCode::OK);
 
         let rsp_ko = make_proteced_request(
-            JwtAuthorizer::from_rsa_pem("../config/jwtRS256.key.pub").check(|_| false),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").check(|_| false),
             JWT_RSA_OK,
         )
         .await;

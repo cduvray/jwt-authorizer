@@ -180,19 +180,19 @@ mod tests {
 
     #[tokio::test]
     async fn build_from_file() {
-        let a = Authorizer::<Value>::build(&KeySourceType::RSA("../config/jwtRS256.key.pub".to_owned()), None, None)
+        let a = Authorizer::<Value>::build(&KeySourceType::RSA("../config/rsa-public1.pem".to_owned()), None, None)
             .await
             .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::RS256));
         assert!(k.await.is_ok());
 
-        let a = Authorizer::<Value>::build(&KeySourceType::EC("../config/ec256-public.pem".to_owned()), None, None)
+        let a = Authorizer::<Value>::build(&KeySourceType::EC("../config/ecdsa-public1.pem".to_owned()), None, None)
             .await
             .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::ES256));
         assert!(k.await.is_ok());
 
-        let a = Authorizer::<Value>::build(&KeySourceType::ED("../config/ed25519-public.pem".to_owned()), None, None)
+        let a = Authorizer::<Value>::build(&KeySourceType::ED("../config/ed25519-public1.pem".to_owned()), None, None)
             .await
             .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::EdDSA));

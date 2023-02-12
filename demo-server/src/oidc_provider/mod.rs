@@ -35,42 +35,42 @@ struct JwkSet {
 async fn jwks() -> Json<Value> {
     let mut kset = JwkSet { keys: Vec::<Jwk>::new() };
 
-    let keypair = RsaKeyPair::from_pem(include_bytes!("../../../config/jwtRS256.key")).unwrap();
+    let keypair = RsaKeyPair::from_pem(include_bytes!("../../../config/rsa-private1.pem")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("rsa01");
     pk.set_algorithm("RS256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair = RsaKeyPair::from_pem(include_bytes!("../../../config/private_rsa_key_pkcs8.pem")).unwrap();
+    let keypair = RsaKeyPair::from_pem(include_bytes!("../../../config/rsa-private2.pem")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("rsa02");
     pk.set_algorithm("RS256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ec256-private.pem"), Some(EcCurve::P256)).unwrap();
+    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ecdsa-private1.pem"), Some(EcCurve::P256)).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("ec01");
     pk.set_algorithm("ES256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/private_ecdsa_key.pem"), Some(EcCurve::P256)).unwrap();
+    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ecdsa-private2.pem"), Some(EcCurve::P256)).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("ec02");
     pk.set_algorithm("ES256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair = EdKeyPair::from_pem(include_bytes!("../../../config/ed25519-private.pem")).unwrap();
+    let keypair = EdKeyPair::from_pem(include_bytes!("../../../config/ed25519-private1.pem")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("ed01");
     pk.set_algorithm("EdDSA");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair = EdKeyPair::from_pem(include_bytes!("../../../config/private_ed25519_key.pem")).unwrap();
+    let keypair = EdKeyPair::from_pem(include_bytes!("../../../config/ed25519-private2.pem")).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("ed02");
     pk.set_algorithm("EdDSA");
@@ -114,12 +114,12 @@ pub async fn tokens() -> Json<Value> {
         nbf: 1516239022, // Jan 2018
     };
 
-    let rsa1_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/jwtRS256.key")).unwrap();
-    let rsa2_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/private_rsa_key_pkcs8.pem")).unwrap();
-    let ec1_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ec256-private.pem")).unwrap();
-    let ec2_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/private_ecdsa_key.pem")).unwrap();
-    let ed1_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private.pem")).unwrap();
-    let ed2_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private.pem")).unwrap();
+    let rsa1_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/rsa-private1.pem")).unwrap();
+    let rsa2_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/rsa-private2.pem")).unwrap();
+    let ec1_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ecdsa-private1.pem")).unwrap();
+    let ec2_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ecdsa-private2.pem")).unwrap();
+    let ed1_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private1.pem")).unwrap();
+    let ed2_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private2.pem")).unwrap();
 
     let rsa1_token = encode(&build_header(Algorithm::RS256, "rsa01"), &claims, &rsa1_key).unwrap();
     let rsa2_token = encode(&build_header(Algorithm::RS256, "rsa02"), &claims, &rsa2_key).unwrap();
