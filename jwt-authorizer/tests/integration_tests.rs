@@ -224,7 +224,6 @@ async fn scenario2() {
     init_test();
     let url = run_jwks_server();
     let refresh = Refresh {
-        minimal_refresh_interval: Duration::from_millis(20),
         refresh_interval: Duration::from_millis(40),
         retry_interval: Duration::from_millis(0),
         strategy: RefreshStrategy::Interval,
@@ -255,9 +254,8 @@ async fn scenario3() {
     let url = run_jwks_server();
     let refresh = Refresh {
         strategy: RefreshStrategy::KeyNotFound,
-        minimal_refresh_interval: Duration::from_millis(20),
+        refresh_interval: Duration::from_millis(40),
         retry_interval: Duration::from_millis(0),
-        ..Default::default()
     };
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url).refresh(refresh);
     let mut app = app(auth).await;
@@ -287,7 +285,7 @@ async fn scenario4() {
     let url = run_jwks_server();
     let refresh = Refresh {
         strategy: RefreshStrategy::NoRefresh,
-        minimal_refresh_interval: Duration::from_millis(0),
+        refresh_interval: Duration::from_millis(0),
         retry_interval: Duration::from_millis(0),
         ..Default::default()
     };
