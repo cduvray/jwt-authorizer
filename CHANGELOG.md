@@ -7,13 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.7.0 (2023-02-14)
+
+### Changed
+
+- Refresh configuration - simplification,  minimal_refresh_interval removed (replaced by refresh_interval in KeyNotFound refresh strategy) 
+
+### Added 
+
+- integration tests, unit tests
+
 ## 0.6.0 (2023-02-05)
 
 ### Added
 
 - JwtAuthorizer::from_oidc(issuer_uri) - building from oidc discovery page
 
-### Chnaged
+### Changed
 
 - JwtAuthorizer::layer() becomes async
 

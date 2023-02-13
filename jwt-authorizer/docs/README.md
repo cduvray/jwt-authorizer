@@ -11,6 +11,7 @@ JWT authoriser Layer for Axum.
     - OpenId Connect Discovery
 - Claims extraction
 - Claims checker
+- tracing support (error logging)
 
 
 ## Usage Example
