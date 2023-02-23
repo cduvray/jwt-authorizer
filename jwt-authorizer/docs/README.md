@@ -5,13 +5,15 @@ JWT authoriser Layer for Axum.
 ## Features
 
 - JWT token verification (Bearer)
-    - Algoritms: ECDSA, RSA, EdDSA, HS
+    - Algoritms: ECDSA, RSA, EdDSA, HMAC
 - JWKS endpoint support
     - Configurable refresh
     - OpenId Connect Discovery
+- Validation
+    - exp, nbf, iss, aud
 - Claims extraction
 - Claims checker
-- tracing support (error logging)
+- Tracing support (error logging)
 
 
 ## Usage Example
@@ -47,6 +49,30 @@ JWT authoriser Layer for Axum.
         .serve(app.into_make_service()).await.expect("server failed");
 # };
 ```
+
+## Validation
+
+Validation configuration object.
+
+If no validation configuration is provided default values will be applyed.
+
+docs: [`jwt-authorizer::Validation`]
+
+```rust
+# use jwt_authorizer::{JwtAuthorizer, Validation};
+# use serde_json::Value;
+
+let validation = Validation::new()
+                    .iss(&["https://issuer1", "https://issuer2"])
+                    .aud(&["audience1"])
+                    .nbf(true)
+                    .leeway(20);
+
+let jwt_auth: JwtAuthorizer<Value> = JwtAuthorizer::from_oidc("https://accounts.google.com")
+                      .validation(validation);
+
+```
+
 
 ## ClaimsChecker
 

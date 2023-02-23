@@ -1,3 +1,5 @@
+mod common;
+
 #[cfg(test)]
 mod tests {
     use axum::{
@@ -8,11 +10,11 @@ mod tests {
         Router,
     };
     use http::{header, HeaderValue};
-    use jwt_authorizer::{JwtAuthorizer, JwtClaims};
+    use jwt_authorizer::{validation::Validation, JwtAuthorizer, JwtClaims};
     use serde::Deserialize;
     use tower::ServiceExt;
 
-    const JWT_RSA_OK: &str = "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6ImtleS1yc2EifQ.eyJzdWIiOiJiQGIuY29tIiwiZXhwIjoyMDAwMDAwMDAwfQ.K9QFjvVquRF2-Wt1QRfipOGwiYsmRs7SAwqKskHemFb9BRRZutpfV4oEoHaXMLomTUe8rH0TMjpKcweYK_H1I8D4r-mAN216oUfxCQiFWDB8T2VBI8um-efUg67i2myDZJr5VXdZH8ywj7bn9LyNS4I_xT-J3XvsngeCpuxVSRiYu4FkcUkLrPzbu2sDyBXFqYO9FOorZ8sl0Ninc93fWT2uUrEG8jRyWCa4xpoqbKbm7CN7T2tOKF7mx_xdSPTeSM-U9mUiHsMOrXi1S05IM0hvNJrBduLS6sMTFWrVhis6zqnuxDOirwZS-aN0_SgMDnZTFPsCh8dkqFde1Pv1IYjZfr5OOHjQ9QWj6UDjam6M1eWVPK6QLlxv5bU_gnlAiHm9wJX38-REwmVhIJIBzKxsgJAu1gnRBxe36OM3rkgYxpB86YvfDyOoFlqx8erdxYv38AtvJibe4HB6KLndp_QMm5XXQsbfyEXWGe8hzDwozdhGeQsJXz7PcI3KPlv19PrUM8njElFpOiyfAEXwbtp1EZTzMZ4ZNF6LLFy1fpLcosgyp05o_2YMvngltSnN3v0IPncJx50StdYsoxPN9Ac_nH8VbNlHfmPHMklD1plof0pYf5SiL8yCQP9Uiw9NrN2PeQzbveMKF1T1UNbn2tefxoxr3k6sgWiMH_g_kkk";
+    use crate::common;
 
     #[derive(Debug, Deserialize, Clone)]
     struct User {
@@ -33,7 +35,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/protected")
-                    .header("Authorization", bearer)
+                    .header("Authorization", format!("Bearer {bearer}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -63,10 +65,24 @@ mod tests {
 
     #[tokio::test]
     async fn protected_with_jwt() {
-        let response = make_proteced_request(JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem"), JWT_RSA_OK).await;
-
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ed_pem("../config/ed25519-public2.pem"),
+            common::JWT_ED2_OK,
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"hello: b@b.com");
 
+        let response =
+            make_proteced_request(JwtAuthorizer::from_ec_pem("../config/ecdsa-public2.pem"), common::JWT_EC2_OK).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"hello: b@b.com");
+
+        let response =
+            make_proteced_request(JwtAuthorizer::from_rsa_pem("../config/rsa-public2.pem"), common::JWT_RSA2_OK).await;
+        assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
     }
@@ -82,16 +98,16 @@ mod tests {
     #[tokio::test]
     async fn protected_with_claims_check() {
         let rsp_ok = make_proteced_request(
-            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").check(|_| true),
-            JWT_RSA_OK,
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public2.pem").check(|_| true),
+            common::JWT_RSA2_OK,
         )
         .await;
 
         assert_eq!(rsp_ok.status(), StatusCode::OK);
 
         let rsp_ko = make_proteced_request(
-            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").check(|_| false),
-            JWT_RSA_OK,
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public2.pem").check(|_| false),
+            common::JWT_RSA2_OK,
         )
         .await;
 
@@ -110,7 +126,8 @@ mod tests {
     // but should be 500 when checking.
     #[tokio::test]
     async fn protected_with_bad_jwks_url() {
-        let response = make_proteced_request(JwtAuthorizer::from_jwks_url("http://bad-url/xxx/yyy"), JWT_RSA_OK).await;
+        let response =
+            make_proteced_request(JwtAuthorizer::from_jwks_url("http://bad-url/xxx/yyy"), common::JWT_RSA1_OK).await;
 
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -127,5 +144,141 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // --------------------
+    //      VALIDATION
+    // ---------------------
+    #[tokio::test]
+    async fn validate_signature() {
+        let response = make_proteced_request(
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").validation(Validation::new().disable_validation()),
+            common::JWT_EC2_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = make_proteced_request(
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").validation(Validation::new()),
+            common::JWT_EC2_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_iss() {
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().iss(&["bad-iss"])),
+            common::JWT_EC1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new()),
+            common::JWT_EC1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
+                .validation(Validation::new().iss(&["http://localhost:3001"])),
+            common::JWT_EC1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn validate_aud() {
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ed_pem("../config/ed25519-public1.pem").validation(Validation::new().aud(&["bad-aud"])),
+            common::JWT_ED1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ed_pem("../config/ed25519-public1.pem").validation(Validation::new()),
+            common::JWT_ED1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ed_pem("../config/ed25519-public1.pem").validation(Validation::new().aud(&["aud1"])),
+            common::JWT_ED1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn validate_exp() {
+        // DEFAULT -> ENABLED
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new()),
+            common::JWT_EC1_EXP_KO,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // DISABLED
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().exp(false)),
+            common::JWT_EC1_EXP_KO,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // ENABLED
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().exp(true)),
+            common::JWT_EC1_EXP_KO,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().exp(true)),
+            common::JWT_EC1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn validate_nbf() {
+        // DEFAULT -> DISABLED
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new()),
+            common::JWT_EC1_NBF_KO,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // DISABLED
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().nbf(false)),
+            common::JWT_EC1_NBF_KO,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // ENABLED
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().nbf(true)),
+            common::JWT_EC1_NBF_KO,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().nbf(true)),
+            common::JWT_EC1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

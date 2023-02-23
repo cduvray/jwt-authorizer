@@ -17,6 +17,7 @@ use tower_service::Service;
 use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
 use crate::error::InitError;
 use crate::jwks::key_store_manager::Refresh;
+use crate::validation::Validation;
 use crate::{AuthError, RefreshStrategy};
 
 /// Authorizer Layer builder
@@ -30,6 +31,7 @@ where
     key_source_type: KeySourceType,
     refresh: Option<Refresh>,
     claims_checker: Option<FnClaimsChecker<C>>,
+    validation: Option<Validation>,
 }
 
 /// authorization layer builder
@@ -43,6 +45,7 @@ where
             key_source_type: KeySourceType::Discovery(issuer.to_string()),
             refresh: Default::default(),
             claims_checker: None,
+            validation: None,
         }
     }
 
@@ -52,6 +55,7 @@ where
             key_source_type: KeySourceType::Jwks(url.to_owned()),
             refresh: Default::default(),
             claims_checker: None,
+            validation: None,
         }
     }
 
@@ -61,6 +65,7 @@ where
             key_source_type: KeySourceType::RSA(path.to_owned()),
             refresh: Default::default(),
             claims_checker: None,
+            validation: None,
         }
     }
 
@@ -70,6 +75,7 @@ where
             key_source_type: KeySourceType::EC(path.to_owned()),
             refresh: Default::default(),
             claims_checker: None,
+            validation: None,
         }
     }
 
@@ -79,6 +85,7 @@ where
             key_source_type: KeySourceType::ED(path.to_owned()),
             refresh: Default::default(),
             claims_checker: None,
+            validation: None,
         }
     }
 
@@ -88,6 +95,7 @@ where
             key_source_type: KeySourceType::Secret(secret),
             refresh: Default::default(),
             claims_checker: None,
+            validation: None,
         }
     }
 
@@ -120,9 +128,16 @@ where
         self
     }
 
+    pub fn validation(mut self, validation: Validation) -> JwtAuthorizer<C> {
+        self.validation = Some(validation);
+
+        self
+    }
+
     /// Build axum layer
-    pub async fn layer(&self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
-        let auth = Arc::new(Authorizer::build(&self.key_source_type, self.claims_checker.clone(), self.refresh).await?);
+    pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+        let val = self.validation.unwrap_or_default();
+        let auth = Arc::new(Authorizer::build(&self.key_source_type, self.claims_checker, self.refresh, val).await?);
         Ok(AsyncAuthorizationLayer::new(auth))
     }
 }

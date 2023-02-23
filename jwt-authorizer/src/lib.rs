@@ -8,12 +8,14 @@ use serde::de::DeserializeOwned;
 pub use self::error::AuthError;
 pub use jwks::key_store_manager::{Refresh, RefreshStrategy};
 pub use layer::JwtAuthorizer;
+pub use validation::Validation;
 
 pub mod authorizer;
 pub mod error;
 pub mod jwks;
 pub mod layer;
 mod oidc;
+pub mod validation;
 
 /// Claims serialized using T
 #[derive(Debug, Clone, Copy, Default)]
