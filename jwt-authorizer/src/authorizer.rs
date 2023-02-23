@@ -74,14 +74,14 @@ where
                 }
             }
             KeySourceType::EC(path) => {
-                let key = DecodingKey::from_ec_der(&read_data(path.as_str())?);
+                let key = DecodingKey::from_ec_pem(&read_data(path.as_str())?)?;
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(key),
                     claims_checker,
                 }
             }
             KeySourceType::ED(path) => {
-                let key = DecodingKey::from_ed_der(&read_data(path.as_str())?);
+                let key = DecodingKey::from_ed_pem(&read_data(path.as_str())?)?;
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(key),
                     claims_checker,
@@ -208,14 +208,14 @@ mod tests {
 
     #[tokio::test]
     async fn build_jwks_url_error() {
-        let a = Authorizer::<Value>::build(&&KeySourceType::Jwks("://xxxx".to_owned()), None, None).await;
+        let a = Authorizer::<Value>::build(&KeySourceType::Jwks("://xxxx".to_owned()), None, None).await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }
 
     #[tokio::test]
     async fn build_discovery_url_error() {
-        let a = Authorizer::<Value>::build(&&KeySourceType::Discovery("://xxxx".to_owned()), None, None).await;
+        let a = Authorizer::<Value>::build(&KeySourceType::Discovery("://xxxx".to_owned()), None, None).await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }

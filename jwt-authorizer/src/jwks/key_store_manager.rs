@@ -265,7 +265,7 @@ mod tests {
         // FAIL, NO LOAD
         let ks = KeyStore {
             jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
-            fail_time: Some(Instant::now() - Duration::from_secs(5)),
+            fail_time: Instant::now().checked_sub(Duration::from_secs(5)),
             load_time: None,
         };
         assert!(ks.can_refresh(Duration::from_secs(0), Duration::from_secs(4)));
@@ -275,7 +275,7 @@ mod tests {
         let ks = KeyStore {
             jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
             fail_time: None,
-            load_time: Some(Instant::now() - Duration::from_secs(5)),
+            load_time: Instant::now().checked_sub(Duration::from_secs(5)),
         };
         assert!(ks.can_refresh(Duration::from_secs(4), Duration::from_secs(0)));
         assert!(!ks.can_refresh(Duration::from_secs(6), Duration::from_secs(0)));
@@ -283,8 +283,8 @@ mod tests {
         // FAIL, LOAD
         let ks = KeyStore {
             jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
-            fail_time: Some(Instant::now() - Duration::from_secs(5)),
-            load_time: Some(Instant::now() - Duration::from_secs(10)),
+            fail_time: Instant::now().checked_sub(Duration::from_secs(5)),
+            load_time: Instant::now().checked_sub(Duration::from_secs(10)),
         };
         assert!(ks.can_refresh(Duration::from_secs(6), Duration::from_secs(4)));
         assert!(!ks.can_refresh(Duration::from_secs(11), Duration::from_secs(4)));
@@ -324,7 +324,7 @@ mod tests {
             .and(path("/"))
             .respond_with(ResponseTemplate::new(200).set_body_json(&jwks))
             .expect(1)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
     }
 
@@ -333,7 +333,7 @@ mod tests {
             .and(path("/"))
             .respond_with(ResponseTemplate::new(500))
             .expect(1)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
     }
 
