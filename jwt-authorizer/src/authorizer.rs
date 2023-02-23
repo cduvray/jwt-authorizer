@@ -74,14 +74,14 @@ where
                 }
             }
             KeySourceType::EC(path) => {
-                let key = DecodingKey::from_ec_der(&read_data(path.as_str())?);
+                let key = DecodingKey::from_ec_pem(&read_data(path.as_str())?)?;
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(key),
                     claims_checker,
                 }
             }
             KeySourceType::ED(path) => {
-                let key = DecodingKey::from_ed_der(&read_data(path.as_str())?);
+                let key = DecodingKey::from_ed_pem(&read_data(path.as_str())?)?;
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(key),
                     claims_checker,
