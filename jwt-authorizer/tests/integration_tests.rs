@@ -91,7 +91,7 @@ impl Stats {
 
 fn discovery(uri: &str) -> Json<Value> {
     Arc::clone(&DISCOVERY_COUNTER).fetch_add(1, Ordering::Relaxed);
-    let d = serde_json::json!({ "jwks_uri": format!("{}/jwks", uri) });
+    let d = serde_json::json!({ "jwks_uri": format!("{uri}/jwks") });
 
     Json(d)
 }
@@ -287,7 +287,6 @@ async fn scenario4() {
         strategy: RefreshStrategy::NoRefresh,
         refresh_interval: Duration::from_millis(0),
         retry_interval: Duration::from_millis(0),
-        ..Default::default()
     };
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url).refresh(refresh);
     let mut app = app(auth).await;

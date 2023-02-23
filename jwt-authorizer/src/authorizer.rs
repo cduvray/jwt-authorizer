@@ -208,14 +208,14 @@ mod tests {
 
     #[tokio::test]
     async fn build_jwks_url_error() {
-        let a = Authorizer::<Value>::build(&&KeySourceType::Jwks("://xxxx".to_owned()), None, None).await;
+        let a = Authorizer::<Value>::build(&KeySourceType::Jwks("://xxxx".to_owned()), None, None).await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }
 
     #[tokio::test]
     async fn build_discovery_url_error() {
-        let a = Authorizer::<Value>::build(&&KeySourceType::Discovery("://xxxx".to_owned()), None, None).await;
+        let a = Authorizer::<Value>::build(&KeySourceType::Discovery("://xxxx".to_owned()), None, None).await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }
