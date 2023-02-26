@@ -101,6 +101,7 @@ fn build_header(alg: Algorithm, kid: &str) -> Header {
 struct Claims {
     iss: &'static str,
     sub: &'static str,
+    aud: &'static str,
     exp: usize,
     nbf: usize,
 }
@@ -110,6 +111,7 @@ pub async fn tokens() -> Json<Value> {
     let claims = Claims {
         iss: ISSUER_URI,
         sub: "b@b.com",
+        aud: "aud1",
         exp: 2000000000, // May 2033
         nbf: 1516239022, // Jan 2018
     };

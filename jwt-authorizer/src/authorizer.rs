@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use jsonwebtoken::{decode, decode_header, jwk::JwkSet, DecodingKey, TokenData, Validation};
+use jsonwebtoken::{decode, decode_header, jwk::JwkSet, DecodingKey, TokenData};
 use reqwest::Url;
 use serde::de::DeserializeOwned;
 
@@ -37,6 +37,7 @@ where
 {
     pub key_source: KeySource,
     pub claims_checker: Option<FnClaimsChecker<C>>,
+    pub validation: crate::validation::Validation,
 }
 
 fn read_data(path: &str) -> Result<Vec<u8>, InitError> {
@@ -64,6 +65,7 @@ where
         key_source_type: &KeySourceType,
         claims_checker: Option<FnClaimsChecker<C>>,
         refresh: Option<Refresh>,
+        validation: crate::validation::Validation,
     ) -> Result<Authorizer<C>, InitError> {
         Ok(match key_source_type {
             KeySourceType::RSA(path) => {
@@ -71,6 +73,7 @@ where
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(key),
                     claims_checker,
+                    validation,
                 }
             }
             KeySourceType::EC(path) => {
@@ -78,6 +81,7 @@ where
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(key),
                     claims_checker,
+                    validation,
                 }
             }
             KeySourceType::ED(path) => {
@@ -85,6 +89,7 @@ where
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(key),
                     claims_checker,
+                    validation,
                 }
             }
             KeySourceType::Secret(secret) => {
@@ -92,6 +97,7 @@ where
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(key),
                     claims_checker,
+                    validation,
                 }
             }
             KeySourceType::JwksString(jwks_str) => {
@@ -102,6 +108,7 @@ where
                 Authorizer {
                     key_source: KeySource::DecodingKeySource(k),
                     claims_checker,
+                    validation,
                 }
             }
             KeySourceType::Jwks(url) => {
@@ -110,6 +117,7 @@ where
                 Authorizer {
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
+                    validation,
                 }
             }
             KeySourceType::Discovery(issuer_url) => {
@@ -120,6 +128,7 @@ where
                 Authorizer {
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
+                    validation,
                 }
             }
         })
@@ -127,9 +136,11 @@ where
 
     pub async fn check_auth(&self, token: &str) -> Result<TokenData<C>, AuthError> {
         let header = decode_header(token)?;
-        let validation = Validation::new(header.alg);
+        // TODO: build validation only once or cache it (store it in key_source?)
+        //         (problem: alg family is checked in jsonwebtoken but may change with store refresh)
+        let jwt_validation = &self.validation.to_jwt_validation(header.alg);
         let decoding_key = self.key_source.get_key(header).await?;
-        let token_data = decode::<C>(token, &decoding_key, &validation)?;
+        let token_data = decode::<C>(token, &decoding_key, jwt_validation)?;
 
         if let Some(ref checker) = self.claims_checker {
             if !checker.check(&token_data.claims) {
@@ -147,12 +158,14 @@ mod tests {
     use jsonwebtoken::{Algorithm, Header};
     use serde_json::Value;
 
+    use crate::validation::Validation;
+
     use super::{Authorizer, KeySourceType};
 
     #[tokio::test]
     async fn build_from_secret() {
         let h = Header::new(Algorithm::HS256);
-        let a = Authorizer::<Value>::build(&KeySourceType::Secret("xxxxxx"), None, None)
+        let a = Authorizer::<Value>::build(&KeySourceType::Secret("xxxxxx"), None, None, Validation::new())
             .await
             .unwrap();
         let k = a.key_source.get_key(h);
@@ -171,7 +184,7 @@ mod tests {
                     "e": "AQAB"
                 }]}
         "#;
-        let a = Authorizer::<Value>::build(&KeySourceType::JwksString(jwks.to_owned()), None, None)
+        let a = Authorizer::<Value>::build(&KeySourceType::JwksString(jwks.to_owned()), None, None, Validation::new())
             .await
             .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::RS256));
@@ -180,42 +193,70 @@ mod tests {
 
     #[tokio::test]
     async fn build_from_file() {
-        let a = Authorizer::<Value>::build(&KeySourceType::RSA("../config/rsa-public1.pem".to_owned()), None, None)
-            .await
-            .unwrap();
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::RSA("../config/rsa-public1.pem".to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::RS256));
         assert!(k.await.is_ok());
 
-        let a = Authorizer::<Value>::build(&KeySourceType::EC("../config/ecdsa-public1.pem".to_owned()), None, None)
-            .await
-            .unwrap();
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::EC("../config/ecdsa-public1.pem".to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::ES256));
         assert!(k.await.is_ok());
 
-        let a = Authorizer::<Value>::build(&KeySourceType::ED("../config/ed25519-public1.pem".to_owned()), None, None)
-            .await
-            .unwrap();
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::ED("../config/ed25519-public1.pem".to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::EdDSA));
         assert!(k.await.is_ok());
     }
 
     #[tokio::test]
     async fn build_file_errors() {
-        let a = Authorizer::<Value>::build(&KeySourceType::RSA("./config/does-not-exist.pem".to_owned()), None, None).await;
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::RSA("./config/does-not-exist.pem".to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }
 
     #[tokio::test]
     async fn build_jwks_url_error() {
-        let a = Authorizer::<Value>::build(&KeySourceType::Jwks("://xxxx".to_owned()), None, None).await;
+        let a =
+            Authorizer::<Value>::build(&KeySourceType::Jwks("://xxxx".to_owned()), None, None, Validation::default()).await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }
 
     #[tokio::test]
     async fn build_discovery_url_error() {
-        let a = Authorizer::<Value>::build(&KeySourceType::Discovery("://xxxx".to_owned()), None, None).await;
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::Discovery("://xxxx".to_owned()),
+            None,
+            None,
+            Validation::default(),
+        )
+        .await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }
