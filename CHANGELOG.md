@@ -7,13 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.8.0 (2023-02-28)
+
+### Added
+
+- validation configuration (exp, nbf, aud, iss, disable_validation)
+- more integration tests added
+
+### Fixed
+
+- `JwtAuthorizer.from_ec()`, `JwtAuthorizer.from_ed()` imported PEM as DER resulting in failed validations
+
 ## 0.7.0 (2023-02-14)
 
 ### Changed
 
-- Refresh configuration - simplification,  minimal_refresh_interval removed (replaced by refresh_interval in KeyNotFound refresh strategy) 
+- Refresh configuration - simplification,  minimal_refresh_interval removed (replaced by refresh_interval in KeyNotFound refresh strategy)
 
-### Added 
+### Added
 
 - integration tests, unit tests
 
