@@ -103,5 +103,9 @@ Example:
 
 By default the jwks keys are reloaded when a request token is signed with a key (`kid` jwt header) that is not present in the store (a minimal intervale between 2 reloads is 10s by default, can be configured).
 
-- `JwtAuthorizer::no_refresh()` configures one and unique reload of jwks keys
-- `JwtAuthorizer::refresh(refresh_configuration)` allows to define a finer configuration for jwks refreshing, for more details see the documentation of `Refresh` struct.
+- [`JwtAuthorizer::no_refresh()`] configures one and unique reload of jwks keys
+- [`JwtAuthorizer::refresh(refresh_configuration)`] allows to define a finer configuration for jwks refreshing, for more details see the documentation of `Refresh` struct.
+
+[`jwt-authorizer::Validation`]: https://docs.rs/jwt-authorizer/latest/jwt_authorizer/validation/struct.Validation.html
+[`JwtAuthorizer::no_refresh()`]: https://docs.rs/jwt-authorizer/latest/jwt_authorizer/layer/struct.JwtAuthorizer.html#method.no_refresh
+[`JwtAuthorizer::refresh(refresh_configuration)`]: https://docs.rs/jwt-authorizer/latest/jwt_authorizer/layer/struct.JwtAuthorizer.html#method.refresh
