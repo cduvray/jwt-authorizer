@@ -11,7 +11,7 @@ pub struct OidcDiscovery {
 pub async fn discover_jwks(issuer: &str) -> Result<String, InitError> {
     let discovery_url = reqwest::Url::parse(issuer)
         .map_err(|e| InitError::DiscoveryError(e.to_string()))?
-        .join("/.well-known/openid-configuration")
+        .join(".well-known/openid-configuration")
         .map_err(|e| InitError::DiscoveryError(e.to_string()))?;
     reqwest::Client::new()
         .get(discovery_url)
