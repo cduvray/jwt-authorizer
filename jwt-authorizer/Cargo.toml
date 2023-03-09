@@ -17,7 +17,7 @@ headers = "0.3"
 jsonwebtoken = "8.2"
 http = "0.2"
 pin-project = "1.0"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", default-features = false, features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0.38"
@@ -33,3 +33,14 @@ hyper = { version = "0.14", features = ["full"] }
 lazy_static = "1.4.0"
 tower = { version = "0.4", features = ["util"] }
 wiremock = "0.5"
+
+[features]
+default = ["default-tls"]
+default-tls = ["reqwest/default-tls"]
+native-tls = ["reqwest/native-tls"]
+native-tls-vendored = ["reqwest/native-tls-vendored"]
+native-tls-alpn = ["reqwest/native-tls-alpn"]
+rustls-tls = ["reqwest/rustls-tls"]
+rustls-tls-manual-roots = ["reqwest/rustls-tls-manual-roots"]
+rustls-tls-webpki-roots = ["reqwest/rustls-tls-webpki-roots"]
+rustls-tls-native-roots = ["reqwest/rustls-tls-native-roots"]
