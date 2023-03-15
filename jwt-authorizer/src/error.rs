@@ -80,7 +80,7 @@ fn response_500() -> Response<BoxBody> {
 /// (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let resp = match self {
+        match self {
             AuthError::JwksRefreshError(err) => {
                 tracing::error!("AuthErrors::JwksRefreshError: {}", err);
                 response_500()
@@ -119,8 +119,6 @@ impl IntoResponse for AuthError {
                 debug!("AuthErrors::InvalidClaims");
                 response_wwwauth(StatusCode::FORBIDDEN, "error=\"insufficient_scope\"")
             }
-        };
-
-        resp
+        }
     }
 }
