@@ -1,12 +1,12 @@
-use std::io::Read;
+use std::{io::Read, sync::Arc};
 
-use jsonwebtoken::{decode, decode_header, jwk::JwkSet, DecodingKey, TokenData};
+use jsonwebtoken::{decode, decode_header, jwk::JwkSet, Algorithm, DecodingKey, TokenData};
 use reqwest::Url;
 use serde::de::DeserializeOwned;
 
 use crate::{
     error::{AuthError, InitError},
-    jwks::{key_store_manager::KeyStoreManager, KeySource},
+    jwks::{key_store_manager::KeyStoreManager, KeyData, KeySource},
     oidc, Refresh,
 };
 
@@ -71,7 +71,11 @@ where
             KeySourceType::RSA(path) => {
                 let key = DecodingKey::from_rsa_pem(&read_data(path.as_str())?)?;
                 Authorizer {
-                    key_source: KeySource::DecodingKeySource(key),
+                    key_source: KeySource::SingleKeySource(Arc::new(KeyData {
+                        kid: None,
+                        alg: vec![Algorithm::RS256, Algorithm::RS384, Algorithm::RS512],
+                        key,
+                    })),
                     claims_checker,
                     validation,
                 }
@@ -79,7 +83,11 @@ where
             KeySourceType::EC(path) => {
                 let key = DecodingKey::from_ec_pem(&read_data(path.as_str())?)?;
                 Authorizer {
-                    key_source: KeySource::DecodingKeySource(key),
+                    key_source: KeySource::SingleKeySource(Arc::new(KeyData {
+                        kid: None,
+                        alg: vec![Algorithm::ES256, Algorithm::ES384],
+                        key,
+                    })),
                     claims_checker,
                     validation,
                 }
@@ -87,7 +95,11 @@ where
             KeySourceType::ED(path) => {
                 let key = DecodingKey::from_ed_pem(&read_data(path.as_str())?)?;
                 Authorizer {
-                    key_source: KeySource::DecodingKeySource(key),
+                    key_source: KeySource::SingleKeySource(Arc::new(KeyData {
+                        kid: None,
+                        alg: vec![Algorithm::EdDSA],
+                        key,
+                    })),
                     claims_checker,
                     validation,
                 }
@@ -95,7 +107,11 @@ where
             KeySourceType::Secret(secret) => {
                 let key = DecodingKey::from_secret(secret.as_bytes());
                 Authorizer {
-                    key_source: KeySource::DecodingKeySource(key),
+                    key_source: KeySource::SingleKeySource(Arc::new(KeyData {
+                        kid: None,
+                        alg: vec![Algorithm::HS256, Algorithm::HS384, Algorithm::HS512],
+                        key,
+                    })),
                     claims_checker,
                     validation,
                 }
@@ -104,9 +120,9 @@ where
                 // TODO: expose it in JwtAuthorizer or remove
                 let set: JwkSet = serde_json::from_str(jwks_str)?;
                 // TODO: replace [0] by kid/alg search
-                let k = DecodingKey::from_jwk(&set.keys[0])?;
+                let k = KeyData::from_jwk(&set.keys[0]).map_err(InitError::KeyDecodingError)?;
                 Authorizer {
-                    key_source: KeySource::DecodingKeySource(k),
+                    key_source: KeySource::SingleKeySource(Arc::new(k)),
                     claims_checker,
                     validation,
                 }
@@ -136,11 +152,10 @@ where
 
     pub async fn check_auth(&self, token: &str) -> Result<TokenData<C>, AuthError> {
         let header = decode_header(token)?;
-        // TODO: build validation only once or cache it (store it in key_source?)
-        //         (problem: alg family is checked in jsonwebtoken but may change with store refresh)
-        let jwt_validation = &self.validation.to_jwt_validation(header.alg);
-        let decoding_key = self.key_source.get_key(header).await?;
-        let token_data = decode::<C>(token, &decoding_key, jwt_validation)?;
+        // TODO: (optimisation) build & store jwt_validation in key data, to avoid rebuilding it for each check
+        let val_key = self.key_source.get_key(header).await?;
+        let jwt_validation = &self.validation.to_jwt_validation(val_key.alg.clone());
+        let token_data = decode::<C>(token, &val_key.key, jwt_validation)?;
 
         if let Some(ref checker) = self.claims_checker {
             if !checker.check(&token_data.claims) {

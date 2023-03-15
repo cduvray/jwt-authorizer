@@ -1,7 +1,4 @@
-use jsonwebtoken::{
-    jwk::{Jwk, JwkSet},
-    Algorithm, DecodingKey,
-};
+use jsonwebtoken::{jwk::JwkSet, Algorithm};
 use reqwest::Url;
 use std::{
     sync::Arc,
@@ -11,8 +8,10 @@ use tokio::sync::Mutex;
 
 use crate::error::AuthError;
 
+use super::KeyData;
+
 /// Defines the strategy for the JWKS refresh.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum RefreshStrategy {
     /// refresh periodicaly
     Interval,
@@ -25,7 +24,7 @@ pub enum RefreshStrategy {
 }
 
 /// JWKS Refresh configuration
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Refresh {
     pub strategy: RefreshStrategy,
     /// After the refresh interval the store will/can be refreshed.
@@ -60,7 +59,7 @@ pub struct KeyStoreManager {
 
 pub struct KeyStore {
     /// key set
-    jwks: JwkSet,
+    keys: Vec<Arc<KeyData>>,
     /// time of the last successfully loaded jwkset
     load_time: Option<Instant>,
     /// time of the last failed load
@@ -73,14 +72,14 @@ impl KeyStoreManager {
             key_url,
             refresh,
             keystore: Arc::new(Mutex::new(KeyStore {
-                jwks: JwkSet { keys: vec![] },
+                keys: vec![],
                 load_time: None,
                 fail_time: None,
             })),
         }
     }
 
-    pub(crate) async fn get_key(&self, header: &jsonwebtoken::Header) -> Result<jsonwebtoken::DecodingKey, AuthError> {
+    pub(crate) async fn get_key(&self, header: &jsonwebtoken::Header) -> Result<Arc<KeyData>, AuthError> {
         let kstore = self.keystore.clone();
         let mut ks_gard = kstore.lock().await;
         let key = match self.refresh.strategy {
@@ -141,8 +140,7 @@ impl KeyStoreManager {
                 }
             }
         };
-
-        DecodingKey::from_jwk(key).map_err(|err| AuthError::InvalidKey(err.to_string()))
+        Ok(key.clone())
     }
 }
 
@@ -169,46 +167,55 @@ impl KeyStore {
             .await
             .map_err(|e| {
                 self.fail_time = Some(Instant::now());
-                AuthError::JwksRefreshError(e)
+                AuthError::JwksRefreshError(e.to_string())
             })?
             .json::<JwkSet>()
             .await
             .map(|jwks| {
                 self.load_time = Some(Instant::now());
-                self.jwks = jwks;
-                self.fail_time = None;
-                Ok(())
+                // self.jwks = jwks;
+                let mut keys: Vec<Arc<KeyData>> = Vec::with_capacity(jwks.keys.len());
+                for jwk in jwks.keys {
+                    match KeyData::from_jwk(&jwk) {
+                        Ok(kdata) => keys.push(Arc::new(kdata)),
+                        Err(err) => {
+                            tracing::warn!("Jwk decoding error, the key will be ignored! ({})", err);
+                        }
+                    };
+                }
+                if keys.is_empty() {
+                    Err(AuthError::JwksRefreshError("No valid keys in the Jwk Set!".to_owned()))
+                } else {
+                    self.keys = keys;
+                    self.fail_time = None;
+                    Ok(())
+                }
             })
             .map_err(|e| {
                 self.fail_time = Some(Instant::now());
-                AuthError::JwksRefreshError(e)
+                AuthError::JwksRefreshError(e.to_string())
             })?
     }
 
     /// Find the key in the set that matches the given key id, if any.
-    pub fn find_kid(&self, kid: &str) -> Option<&Jwk> {
-        self.jwks.find(kid)
+    pub fn find_kid(&self, kid: &str) -> Option<&Arc<KeyData>> {
+        self.keys.iter().find(|k| k.kid.is_some() && k.kid.as_ref().unwrap() == kid)
     }
 
     /// Find the key in the set that matches the given key id, if any.
-    pub fn find_alg(&self, alg: &Algorithm) -> Option<&Jwk> {
-        self.jwks.keys.iter().find(|jwk| {
-            if let Some(ref a) = jwk.common.algorithm {
-                alg == a
-            } else {
-                false
-            }
-        })
+    pub fn find_alg(&self, alg: &Algorithm) -> Option<&Arc<KeyData>> {
+        self.keys.iter().find(|k| k.alg.contains(alg))
     }
 
     /// Find first key.
-    pub fn find_first(&self) -> Option<&Jwk> {
-        self.jwks.keys.get(0)
+    pub fn find_first(&self) -> Option<&Arc<KeyData>> {
+        self.keys.get(0)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     use jsonwebtoken::Algorithm;
@@ -220,7 +227,17 @@ mod tests {
     };
 
     use crate::jwks::key_store_manager::{KeyStore, KeyStoreManager};
+    use crate::jwks::KeyData;
     use crate::{Refresh, RefreshStrategy};
+
+    const JWK_RSA01: &str = r#"{
+        "kty": "RSA",
+        "n": "2pQeZdxa7q093K7bj5h6-leIpxfTnuAxzXdhjfGEJHxmt2ekHyCBWWWXCBiDn2RTcEBcy6gZqOW45Uy_tw-5e-Px1xFj1PykGEkRlOpYSAeWsNaAWvvpGB9m4zQ0PgZeMDDXE5IIBrY6YAzmGQxV-fcGGLhJnXl0-5_z7tKC7RvBoT3SGwlc_AmJqpFtTpEBn_fDnyqiZbpcjXYLExFpExm41xDitRKHWIwfc3dV8_vlNntlxCPGy_THkjdXJoHv2IJmlhvmr5_h03iGMLWDKSywxOol_4Wc1BT7Hb6byMxW40GKwSJJ4p7W8eI5mqggRHc8jlwSsTN9LZ2VOvO-XiVShZRVg7JeraGAfWwaIgIJ1D8C1h5Pi0iFpp2suxpHAXHfyLMJXuVotpXbDh4NDX-A4KRMgaxcfAcui_x6gybksq6gF90-9nfQfmVMVJctZ6M-FvRr-itd1Nef5WAtwUp1qyZygAXU3cH3rarscajmurOsP6dE1OHl3grY_eZhQxk33VBK9lavqNKPg6Q_PLiq1ojbYBj3bcYifJrsNeQwxldQP83aWt5rGtgZTehKVJwa40Uy_Grae1iRnsDtdSy5sTJIJ6EiShnWAdMoGejdiI8vpkjrdU8SWH8lv1KXI54DsbyAuke2cYz02zPWc6JEotQqI0HwhzU0KHyoY4s",
+        "e": "AQAB",
+        "kid": "rsa01",
+        "alg": "RS256",
+        "use": "sig"
+      }"#;
 
     const JWK_ED01: &str = r#"{
         "kty": "OKP",
@@ -264,7 +281,7 @@ mod tests {
     fn keystore_can_refresh() {
         // FAIL, NO LOAD
         let ks = KeyStore {
-            jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
+            keys: vec![],
             fail_time: Instant::now().checked_sub(Duration::from_secs(5)),
             load_time: None,
         };
@@ -273,7 +290,7 @@ mod tests {
 
         // NO FAIL, LOAD
         let ks = KeyStore {
-            jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
+            keys: vec![],
             fail_time: None,
             load_time: Instant::now().checked_sub(Duration::from_secs(5)),
         };
@@ -282,7 +299,7 @@ mod tests {
 
         // FAIL, LOAD
         let ks = KeyStore {
-            jwks: jsonwebtoken::jwk::JwkSet { keys: vec![] },
+            keys: vec![],
             fail_time: Instant::now().checked_sub(Duration::from_secs(5)),
             load_time: Instant::now().checked_sub(Duration::from_secs(10)),
         };
@@ -293,25 +310,28 @@ mod tests {
 
     #[test]
     fn find_kid() {
-        let jwk0: Jwk = serde_json::from_str(r#"{"kid":"1","kty":"RSA","alg":"RS256","n":"xxxx","e":"AQAB"}"#).unwrap();
-        let jwk1: Jwk = serde_json::from_str(r#"{"kid":"2","kty":"RSA","alg":"RS256","n":"xxxx","e":"AQAB"}"#).unwrap();
+        let jwk0: Jwk = serde_json::from_str(JWK_RSA01).unwrap();
+        let jwk1: Jwk = serde_json::from_str(JWK_EC01).unwrap();
         let ks = KeyStore {
             load_time: None,
             fail_time: None,
-            jwks: jsonwebtoken::jwk::JwkSet { keys: vec![jwk0, jwk1] },
+            keys: vec![
+                Arc::new(KeyData::from_jwk(&jwk0).unwrap()),
+                Arc::new(KeyData::from_jwk(&jwk1).unwrap()),
+            ],
         };
-        assert!(ks.find_kid("1").is_some());
-        assert!(ks.find_kid("2").is_some());
+        assert!(ks.find_kid("rsa01").is_some());
+        assert!(ks.find_kid("ec01").is_some());
         assert!(ks.find_kid("3").is_none());
     }
 
     #[test]
     fn find_alg() {
-        let jwk0: Jwk = serde_json::from_str(r#"{"kty": "RSA", "alg": "RS256", "n": "xxx","e": "yyy"}"#).unwrap();
+        let jwk0: Jwk = serde_json::from_str(JWK_RSA01).unwrap();
         let ks = KeyStore {
             load_time: None,
             fail_time: None,
-            jwks: jsonwebtoken::jwk::JwkSet { keys: vec![jwk0] },
+            keys: vec![Arc::new(KeyData::from_jwk(&jwk0).unwrap())],
         };
         assert!(ks.find_alg(&Algorithm::RS256).is_some());
         assert!(ks.find_alg(&Algorithm::EdDSA).is_none());

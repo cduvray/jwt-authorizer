@@ -18,7 +18,7 @@ pub enum InitError {
     KeyFileError(#[from] std::io::Error),
 
     #[error(transparent)]
-    KeyFileDecodingError(#[from] jsonwebtoken::errors::Error),
+    KeyDecodingError(#[from] jsonwebtoken::errors::Error),
 
     #[error("Builder Error {0}")]
     DiscoveryError(String),
@@ -35,8 +35,8 @@ pub enum AuthError {
     #[error(transparent)]
     JwksSerialisationError(#[from] serde_json::Error),
 
-    #[error(transparent)]
-    JwksRefreshError(#[from] reqwest::Error),
+    #[error("JwksRefreshError {0}")]
+    JwksRefreshError(String),
 
     #[error("InvalidKey {0}")]
     InvalidKey(String),

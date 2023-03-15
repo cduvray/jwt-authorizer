@@ -82,7 +82,7 @@ impl Validation {
         self
     }
 
-    pub(crate) fn to_jwt_validation(&self, alg: Algorithm) -> jsonwebtoken::Validation {
+    pub(crate) fn to_jwt_validation(&self, alg: Vec<Algorithm>) -> jsonwebtoken::Validation {
         let required_claims = if self.validate_exp {
             let mut claims = HashSet::with_capacity(1);
             claims.insert("exp".to_owned());
@@ -103,7 +103,7 @@ impl Validation {
         jwt_validation.iss = iss;
         jwt_validation.aud = aud;
         jwt_validation.sub = None;
-        jwt_validation.algorithms = vec![alg];
+        jwt_validation.algorithms = alg;
         if !self.validate_signature {
             jwt_validation.insecure_disable_signature_validation();
         }
