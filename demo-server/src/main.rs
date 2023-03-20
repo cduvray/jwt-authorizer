@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use jwt_authorizer::layer::JwtSource;
 
 mod oidc_provider;
 
@@ -49,7 +50,7 @@ async fn main() -> Result<(), InitError> {
     let api = Router::new()
         .route("/protected", get(protected))
         // adding the authorizer layer
-        .layer(jwt_auth.layer().await?);
+        .layer(jwt_auth.layer(JwtSource::Bearer).await?);
 
     let app = Router::new()
         // public endpoint

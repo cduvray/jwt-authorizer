@@ -13,12 +13,13 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower_layer::Layer;
 use tower_service::Service;
+use tower_cookies::Cookies;
 
 use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
 use crate::error::InitError;
 use crate::jwks::key_store_manager::Refresh;
 use crate::validation::Validation;
-use crate::{AuthError, RefreshStrategy};
+use crate::{AuthError, layer, RefreshStrategy};
 
 /// Authorizer Layer builder
 ///
@@ -135,13 +136,12 @@ where
     }
 
     /// Build axum layer
-    pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+    pub async fn layer(self, jwt_source: JwtSource) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
         let auth = Arc::new(Authorizer::build(&self.key_source_type, self.claims_checker, self.refresh, val).await?);
-        Ok(AsyncAuthorizationLayer::new(auth))
+        Ok(AsyncAuthorizationLayer::new(auth, jwt_source))
     }
 }
-
 /// Trait for authorizing requests.
 pub trait AsyncAuthorizer<B> {
     type RequestBody;
@@ -166,10 +166,24 @@ where
     fn authorize(&self, mut request: Request<B>) -> Self::Future {
         let authorizer = self.auth.clone();
         let h = request.headers();
-        let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
+
+        let token = match &self.jwt_source {
+            layer::JwtSource::Bearer => {
+                let bearer_o : Option<Authorization<Bearer>> =  h.typed_get();
+                bearer_o.and_then(|b| Some(String::from(b.0.token())))
+            }
+            layer::JwtSource::Cookie(name) => {
+                if let Some(c) = request.extensions().get::<Cookies>() {
+                   c.get(name.as_str()).and_then(|c| Some(String::from(c.value())))
+                } else {
+                    tracing::warn!("You have to add the tower_cookies::CookieManagerLayer middleware to use Cookies as JWT source.");
+                    None
+                }
+            }
+        };
         Box::pin(async move {
-            if let Some(bearer) = bearer_o {
-                match authorizer.check_auth(bearer.token()).await {
+            if let Some(token) = token {
+                match authorizer.check_auth(token.as_str()).await {
                     Ok(token_data) => {
                         // Set `token_data` as a request extension so it can be accessed by other
                         // services down the stack.
@@ -194,14 +208,15 @@ where
     C: Clone + DeserializeOwned + Send,
 {
     auth: Arc<Authorizer<C>>,
+    jwt_source: JwtSource,
 }
 
 impl<C> AsyncAuthorizationLayer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    pub fn new(auth: Arc<Authorizer<C>>) -> AsyncAuthorizationLayer<C> {
-        Self { auth }
+    pub fn new(auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationLayer<C> {
+        Self { auth, jwt_source }
     }
 }
 
@@ -212,11 +227,17 @@ where
     type Service = AsyncAuthorizationService<S, C>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        AsyncAuthorizationService::new(inner, self.auth.clone())
+        AsyncAuthorizationService::new(inner, self.auth.clone(), self.jwt_source.clone())
     }
 }
 
 // ----------  AsyncAuthorizationService  --------
+
+#[derive(Clone)]
+pub enum JwtSource{
+    Bearer,
+    Cookie(String),
+}
 
 #[derive(Clone)]
 pub struct AsyncAuthorizationService<S, C>
@@ -225,6 +246,7 @@ where
 {
     pub inner: S,
     pub auth: Arc<Authorizer<C>>,
+    pub jwt_source: JwtSource,
 }
 
 impl<S, C> AsyncAuthorizationService<S, C>
@@ -253,8 +275,8 @@ where
     /// Authorize requests using a custom scheme.
     ///
     /// The `Authorization` header is required to have the value provided.
-    pub fn new(inner: S, auth: Arc<Authorizer<C>>) -> AsyncAuthorizationService<S, C> {
-        Self { inner, auth }
+    pub fn new(inner: S, auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
+        Self { inner, auth , jwt_source }
     }
 }
 
