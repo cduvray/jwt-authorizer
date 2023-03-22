@@ -51,7 +51,7 @@ pub enum KeySourceType {
     RSA(String),
     EC(String),
     ED(String),
-    Secret(&'static str),
+    Secret(String),
     Jwks(String),
     JwksString(String), // TODO: expose JwksString in JwtAuthorizer or remove it
     Discovery(String),
@@ -180,7 +180,7 @@ mod tests {
     #[tokio::test]
     async fn build_from_secret() {
         let h = Header::new(Algorithm::HS256);
-        let a = Authorizer::<Value>::build(&KeySourceType::Secret("xxxxxx"), None, None, Validation::new())
+        let a = Authorizer::<Value>::build(&KeySourceType::Secret("xxxxxx".to_owned()), None, None, Validation::new())
             .await
             .unwrap();
         let k = a.key_source.get_key(h);
