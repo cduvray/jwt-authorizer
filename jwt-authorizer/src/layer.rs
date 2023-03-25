@@ -51,7 +51,7 @@ where
     }
 
     /// Builds Authorizer Layer from a JWKS endpoint
-    pub fn from_jwks_url(url: &'static str) -> JwtAuthorizer<C> {
+    pub fn from_jwks_url(url: &str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: KeySourceType::Jwks(url.to_owned()),
             refresh: Default::default(),
@@ -61,7 +61,7 @@ where
     }
 
     /// Builds Authorizer Layer from a RSA PEM file
-    pub fn from_rsa_pem(path: &'static str) -> JwtAuthorizer<C> {
+    pub fn from_rsa_pem(path: &str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: KeySourceType::RSA(path.to_owned()),
             refresh: Default::default(),
@@ -71,7 +71,7 @@ where
     }
 
     /// Builds Authorizer Layer from a EC PEM file
-    pub fn from_ec_pem(path: &'static str) -> JwtAuthorizer<C> {
+    pub fn from_ec_pem(path: &str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: KeySourceType::EC(path.to_owned()),
             refresh: Default::default(),
@@ -81,7 +81,7 @@ where
     }
 
     /// Builds Authorizer Layer from a EC PEM file
-    pub fn from_ed_pem(path: &'static str) -> JwtAuthorizer<C> {
+    pub fn from_ed_pem(path: &str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: KeySourceType::ED(path.to_owned()),
             refresh: Default::default(),
@@ -91,9 +91,9 @@ where
     }
 
     /// Builds Authorizer Layer from a secret phrase
-    pub fn from_secret(secret: &'static str) -> JwtAuthorizer<C> {
+    pub fn from_secret(secret: &str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
-            key_source_type: KeySourceType::Secret(secret),
+            key_source_type: KeySourceType::Secret(secret.to_owned()),
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
