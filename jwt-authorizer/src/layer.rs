@@ -69,6 +69,16 @@ where
         }
     }
 
+    /// Builds Authorizer Layer from an RSA PEM raw text
+    pub fn from_rsa_pem_text(text: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::RSAString(text.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
     /// Builds Authorizer Layer from a EC PEM file
     pub fn from_ec_pem(path: &str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
@@ -79,10 +89,30 @@ where
         }
     }
 
+    /// Builds Authorizer Layer from a EC PEM raw text
+    pub fn from_ec_pem_text(text: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::ECString(text.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
     /// Builds Authorizer Layer from a EC PEM file
     pub fn from_ed_pem(path: &str) -> JwtAuthorizer<C> {
         JwtAuthorizer {
             key_source_type: KeySourceType::ED(path.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a EC PEM raw text
+    pub fn from_ed_pem_text(text: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::EDString(text.to_owned()),
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
