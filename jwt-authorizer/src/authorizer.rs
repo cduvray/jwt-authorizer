@@ -282,6 +282,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn build_from_text() {
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::RSAString(include_str!("../../config/rsa-public1.pem").to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
+        let k = a.key_source.get_key(Header::new(Algorithm::RS256));
+        assert!(k.await.is_ok());
+
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::ECString(include_str!("../../config/ecdsa-public1.pem").to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
+        let k = a.key_source.get_key(Header::new(Algorithm::ES256));
+        assert!(k.await.is_ok());
+
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::EDString(include_str!("../../config/ed25519-public1.pem").to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
+        let k = a.key_source.get_key(Header::new(Algorithm::EdDSA));
+        assert!(k.await.is_ok());
+    }
+
+    #[tokio::test]
     async fn build_file_errors() {
         let a = Authorizer::<Value>::build(
             &KeySourceType::RSA("./config/does-not-exist.pem".to_owned()),
