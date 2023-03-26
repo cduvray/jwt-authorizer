@@ -33,6 +33,7 @@ where
     refresh: Option<Refresh>,
     claims_checker: Option<FnClaimsChecker<C>>,
     validation: Option<Validation>,
+    pub jwt_source: JwtSource,
 }
 
 /// authorization layer builder
@@ -47,6 +48,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -57,6 +59,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -67,6 +70,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -77,6 +81,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -87,6 +92,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -97,6 +103,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -135,11 +142,17 @@ where
         self
     }
 
+    pub fn with_jwt_source(mut self, src: JwtSource) -> JwtAuthorizer<C> {
+        self.jwt_source = src;
+
+        self
+    }
+
     /// Build axum layer
-    pub async fn layer(self, jwt_source: JwtSource) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+    pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
         let auth = Arc::new(Authorizer::build(&self.key_source_type, self.claims_checker, self.refresh, val).await?);
-        Ok(AsyncAuthorizationLayer::new(auth, jwt_source))
+        Ok(AsyncAuthorizationLayer::new(auth, self.jwt_source))
     }
 }
 /// Trait for authorizing requests.
