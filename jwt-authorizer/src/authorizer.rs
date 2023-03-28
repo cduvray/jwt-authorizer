@@ -49,8 +49,11 @@ fn read_data(path: &str) -> Result<Vec<u8>, InitError> {
 
 pub enum KeySourceType {
     RSA(String),
+    RSAString(String),
     EC(String),
+    ECString(String),
     ED(String),
+    EDString(String),
     Secret(String),
     Jwks(String),
     JwksString(String), // TODO: expose JwksString in JwtAuthorizer or remove it
@@ -80,6 +83,18 @@ where
                     validation,
                 }
             }
+            KeySourceType::RSAString(text) => {
+                let key = DecodingKey::from_rsa_pem(text.as_bytes())?;
+                Authorizer {
+                    key_source: KeySource::SingleKeySource(Arc::new(KeyData {
+                        kid: None,
+                        alg: vec![Algorithm::RS256, Algorithm::RS384, Algorithm::RS512],
+                        key,
+                    })),
+                    claims_checker,
+                    validation,
+                }
+            }
             KeySourceType::EC(path) => {
                 let key = DecodingKey::from_ec_pem(&read_data(path.as_str())?)?;
                 Authorizer {
@@ -92,8 +107,32 @@ where
                     validation,
                 }
             }
+            KeySourceType::ECString(text) => {
+                let key = DecodingKey::from_ec_pem(text.as_bytes())?;
+                Authorizer {
+                    key_source: KeySource::SingleKeySource(Arc::new(KeyData {
+                        kid: None,
+                        alg: vec![Algorithm::ES256, Algorithm::ES384],
+                        key,
+                    })),
+                    claims_checker,
+                    validation,
+                }
+            }
             KeySourceType::ED(path) => {
                 let key = DecodingKey::from_ed_pem(&read_data(path.as_str())?)?;
+                Authorizer {
+                    key_source: KeySource::SingleKeySource(Arc::new(KeyData {
+                        kid: None,
+                        alg: vec![Algorithm::EdDSA],
+                        key,
+                    })),
+                    claims_checker,
+                    validation,
+                }
+            }
+            KeySourceType::EDString(text) => {
+                let key = DecodingKey::from_ed_pem(text.as_bytes())?;
                 Authorizer {
                     key_source: KeySource::SingleKeySource(Arc::new(KeyData {
                         kid: None,
@@ -232,6 +271,42 @@ mod tests {
 
         let a = Authorizer::<Value>::build(
             &KeySourceType::ED("../config/ed25519-public1.pem".to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
+        let k = a.key_source.get_key(Header::new(Algorithm::EdDSA));
+        assert!(k.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn build_from_text() {
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::RSAString(include_str!("../../config/rsa-public1.pem").to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
+        let k = a.key_source.get_key(Header::new(Algorithm::RS256));
+        assert!(k.await.is_ok());
+
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::ECString(include_str!("../../config/ecdsa-public1.pem").to_owned()),
+            None,
+            None,
+            Validation::new(),
+        )
+        .await
+        .unwrap();
+        let k = a.key_source.get_key(Header::new(Algorithm::ES256));
+        assert!(k.await.is_ok());
+
+        let a = Authorizer::<Value>::build(
+            &KeySourceType::EDString(include_str!("../../config/ed25519-public1.pem").to_owned()),
             None,
             None,
             Validation::new(),
