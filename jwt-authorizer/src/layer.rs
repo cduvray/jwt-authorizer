@@ -142,7 +142,7 @@ where
         self
     }
 
-    pub fn with_jwt_source(mut self, src: JwtSource) -> JwtAuthorizer<C> {
+    pub fn jwt_source(mut self, src: JwtSource) -> JwtAuthorizer<C> {
         self.jwt_source = src;
 
         self
