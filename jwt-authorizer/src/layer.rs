@@ -11,15 +11,15 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use tower_cookies::Cookies;
 use tower_layer::Layer;
 use tower_service::Service;
-use tower_cookies::Cookies;
 
 use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
 use crate::error::InitError;
 use crate::jwks::key_store_manager::Refresh;
 use crate::validation::Validation;
-use crate::{AuthError, layer, RefreshStrategy};
+use crate::{layer, AuthError, RefreshStrategy};
 
 /// Authorizer Layer builder
 ///
@@ -81,6 +81,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -102,6 +103,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -123,6 +125,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
+            jwt_source: JwtSource::Bearer,
         }
     }
 
@@ -212,14 +215,16 @@ where
 
         let token = match &self.jwt_source {
             layer::JwtSource::Bearer => {
-                let bearer_o : Option<Authorization<Bearer>> =  h.typed_get();
+                let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
                 bearer_o.and_then(|b| Some(String::from(b.0.token())))
             }
             layer::JwtSource::Cookie(name) => {
                 if let Some(c) = request.extensions().get::<Cookies>() {
-                   c.get(name.as_str()).and_then(|c| Some(String::from(c.value())))
+                    c.get(name.as_str()).and_then(|c| Some(String::from(c.value())))
                 } else {
-                    tracing::warn!("You have to add the tower_cookies::CookieManagerLayer middleware to use Cookies as JWT source.");
+                    tracing::warn!(
+                        "You have to add the tower_cookies::CookieManagerLayer middleware to use Cookies as JWT source."
+                    );
                     None
                 }
             }
@@ -277,7 +282,7 @@ where
 // ----------  AsyncAuthorizationService  --------
 
 #[derive(Clone)]
-pub enum JwtSource{
+pub enum JwtSource {
     Bearer,
     Cookie(String),
 }
@@ -319,7 +324,7 @@ where
     ///
     /// The `Authorization` header is required to have the value provided.
     pub fn new(inner: S, auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
-        Self { inner, auth , jwt_source }
+        Self { inner, auth, jwt_source }
     }
 }
 
