@@ -216,11 +216,11 @@ where
         let token = match &self.jwt_source {
             layer::JwtSource::Bearer => {
                 let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
-                bearer_o.and_then(|b| Some(String::from(b.0.token())))
+                bearer_o.map(|b| String::from(b.0.token()))
             }
             layer::JwtSource::Cookie(name) => {
                 if let Some(c) = request.extensions().get::<Cookies>() {
-                    c.get(name.as_str()).and_then(|c| Some(String::from(c.value())))
+                    c.get(name.as_str()).map(|c| String::from(c.value()))
                 } else {
                     tracing::warn!(
                         "You have to add the tower_cookies::CookieManagerLayer middleware to use Cookies as JWT source."
