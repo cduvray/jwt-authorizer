@@ -228,6 +228,9 @@ where
                     None
                 }
             }
+            layer::JwtSource::Header(name) => {
+                request.headers().get(name).map(|c| String::from(c.to_str().unwrap()))
+            }
         };
         Box::pin(async move {
             if let Some(token) = token {
@@ -285,6 +288,7 @@ where
 pub enum JwtSource {
     Bearer,
     Cookie(String),
+    Header(http::HeaderName),
 }
 
 #[derive(Clone)]
