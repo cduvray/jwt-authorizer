@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     body::{self, BoxBody, Empty},
     http::StatusCode,
@@ -30,10 +32,10 @@ pub enum InitError {
     JwksParsingError(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum AuthError {
     #[error(transparent)]
-    JwksSerialisationError(#[from] serde_json::Error),
+    JwksSerialisationError(#[from] Arc<serde_json::Error>),
 
     #[error("JwksRefreshError {0}")]
     JwksRefreshError(String),
@@ -55,6 +57,9 @@ pub enum AuthError {
 
     #[error("Invalid Claim")]
     InvalidClaims(),
+
+    #[error("Missing Layer")]
+    MissingLayer,
 }
 
 fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
@@ -165,6 +170,10 @@ impl IntoResponse for AuthError {
             AuthError::InvalidClaims() => {
                 debug!("AuthErrors::InvalidClaims");
                 response_wwwauth(StatusCode::FORBIDDEN, "error=\"insufficient_scope\"")
+            }
+            AuthError::MissingLayer => {
+                debug!("AuthErrors::MissingLayer");
+                response_500()
             }
         }
     }

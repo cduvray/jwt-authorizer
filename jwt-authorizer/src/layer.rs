@@ -221,17 +221,22 @@ where
                 .typed_get::<headers::Cookie>()
                 .and_then(|c| c.get(name.as_str()).map(String::from)),
         };
-        Box::pin(async move {
-            if let Some(token) = token {
-                authorizer.check_auth(token.as_str()).await.map(|token_data| {
-                    // Set `token_data` as a request extension so it can be accessed by other
-                    // services down the stack.
-                    request.extensions_mut().insert(token_data);
 
-                    request
-                })
+        let auto_reject = self.auto_reject;
+
+        Box::pin(async move {
+            let result = if let Some(token) = token {
+                authorizer.check_auth(token.as_str()).await
             } else {
                 Err(AuthError::MissingToken())
+            };
+
+            match (auto_reject, result) {
+                (true, Err(e)) => Err(e),
+                (_, result) => {
+                    request.extensions_mut().insert(result);
+                    Ok(request)
+                }
             }
         })
     }
@@ -246,6 +251,7 @@ where
 {
     auth: Arc<Authorizer<C>>,
     jwt_source: JwtSource,
+    auto_reject: bool,
 }
 
 impl<C> AsyncAuthorizationLayer<C>
@@ -253,7 +259,18 @@ where
     C: Clone + DeserializeOwned + Send,
 {
     pub fn new(auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationLayer<C> {
-        Self { auth, jwt_source }
+        Self {
+            auth,
+            jwt_source,
+            auto_reject: true,
+        }
+    }
+
+    /// Whether the layer should blanket reject all requests that don't have a valid token,
+    /// or to leave it up to the handlers / extractors.
+    pub fn auto_reject(mut self, auto_reject: bool) -> Self {
+        self.auto_reject = auto_reject;
+        self
     }
 }
 
@@ -264,7 +281,7 @@ where
     type Service = AsyncAuthorizationService<S, C>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        AsyncAuthorizationService::new(inner, self.auth.clone(), self.jwt_source.clone())
+        AsyncAuthorizationService::new(inner, self.auth.clone(), self.jwt_source.clone(), self.auto_reject)
     }
 }
 
@@ -293,6 +310,7 @@ where
     pub inner: S,
     pub auth: Arc<Authorizer<C>>,
     pub jwt_source: JwtSource,
+    pub auto_reject: bool,
 }
 
 impl<S, C> AsyncAuthorizationService<S, C>
@@ -321,8 +339,18 @@ where
     /// Authorize requests using a custom scheme.
     ///
     /// The `Authorization` header is required to have the value provided.
-    pub fn new(inner: S, auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
-        Self { inner, auth, jwt_source }
+    pub fn new(
+        inner: S,
+        auth: Arc<Authorizer<C>>,
+        jwt_source: JwtSource,
+        auto_reject: bool,
+    ) -> AsyncAuthorizationService<S, C> {
+        Self {
+            inner,
+            auth,
+            jwt_source,
+            auto_reject,
+        }
     }
 }
 
