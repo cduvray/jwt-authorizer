@@ -1,7 +1,7 @@
 use std::{
     net::{SocketAddr, TcpListener},
     sync::{
-        atomic::{AtomicI16, Ordering},
+        atomic::{AtomicU16, Ordering},
         Arc, Once,
     },
     thread,
@@ -9,9 +9,9 @@ use std::{
 };
 
 use axum::{response::Response, routing::get, Json, Router};
-use http::{header::AUTHORIZATION, Request, StatusCode};
+use http::{request::Builder, Request, StatusCode};
 use hyper::Body;
-use jwt_authorizer::{JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
+use jwt_authorizer::{layer::JwtSource, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -32,49 +32,65 @@ struct User {
     sub: String,
 }
 
-lazy_static! {
-    static ref DISCOVERY_COUNTER: Arc<AtomicI16> = Arc::new(AtomicI16::new(0));
-    static ref JWKS_COUNTER: Arc<AtomicI16> = Arc::new(AtomicI16::new(0));
+struct Stats {
+    discovery_counter: Arc<AtomicU16>,
+    jwks_counter: Arc<AtomicU16>,
 }
-
-struct Stats {}
 
 impl Stats {
-    fn reset() {
-        Arc::clone(&DISCOVERY_COUNTER).store(0, Ordering::Relaxed);
-        Arc::clone(&JWKS_COUNTER).store(0, Ordering::Relaxed);
+    fn new() -> Self {
+        Self {
+            discovery_counter: Arc::new(AtomicU16::new(0)),
+            jwks_counter: Arc::new(AtomicU16::new(0)),
+        }
     }
-    fn jwks_counter() -> i16 {
-        Arc::clone(&JWKS_COUNTER).load(Ordering::Relaxed)
+
+    fn jwks_counter(&self) -> u16 {
+        self.jwks_counter.load(Ordering::Relaxed)
     }
-    fn discovery_counter() -> i16 {
-        Arc::clone(&DISCOVERY_COUNTER).load(Ordering::Relaxed)
+
+    fn discovery_counter(&self) -> u16 {
+        self.discovery_counter.load(Ordering::Relaxed)
+    }
+
+    fn discovery(&self, uri: &str) -> Json<Value> {
+        self.discovery_counter.fetch_add(1, Ordering::Relaxed);
+        let d = serde_json::json!({ "jwks_uri": format!("{uri}/jwks") });
+
+        Json(d)
+    }
+
+    fn jwks(&self) -> Json<Value> {
+        self.jwks_counter.fetch_add(1, Ordering::Relaxed);
+        Json(common::JWKS_RSA1.clone())
     }
 }
 
-fn discovery(uri: &str) -> Json<Value> {
-    Arc::clone(&DISCOVERY_COUNTER).fetch_add(1, Ordering::Relaxed);
-    let d = serde_json::json!({ "jwks_uri": format!("{uri}/jwks") });
-
-    Json(d)
-}
-
-async fn jwks() -> Json<Value> {
-    Arc::clone(&JWKS_COUNTER).fetch_add(1, Ordering::Relaxed);
-
-    Json(common::JWKS_RSA1.clone())
-}
-
-fn run_jwks_server() -> String {
+fn run_jwks_server(stats: &Arc<Stats>) -> String {
     let listener = TcpListener::bind("0.0.0.0:0".parse::<SocketAddr>().unwrap()).unwrap();
     let addr = listener.local_addr().unwrap();
     let url = format!("http://{}:{}", addr.ip(), addr.port());
 
     let url2 = url.clone();
 
+    let disc_stats = stats.clone();
+    let jwks_stats = stats.clone();
+
     let app = Router::new()
-        .route("/.well-known/openid-configuration", get(|| async move { discovery(&url2) }))
-        .route("/jwks", get(jwks));
+        .route(
+            "/.well-known/openid-configuration",
+            get(move || {
+                let disc_stats = disc_stats.clone();
+                async move { disc_stats.discovery(&url2) }
+            }),
+        )
+        .route(
+            "/jwks",
+            get(move || {
+                let jwks_stats = jwks_stats.clone();
+                async move { jwks_stats.jwks() }
+            }),
+        );
 
     tokio::spawn(async move {
         axum::Server::from_tcp(listener)
@@ -87,7 +103,7 @@ fn run_jwks_server() -> String {
     url
 }
 
-async fn app(jwt_auth: JwtAuthorizer<User>) -> Router {
+async fn app(jwt_auth: JwtAuthorizer<User>, source: JwtSource, auto_reject: bool) -> Router {
     async fn public_handler() -> &'static str {
         "public"
     }
@@ -104,12 +120,12 @@ async fn app(jwt_auth: JwtAuthorizer<User>) -> Router {
     let protected_route: Router = Router::new()
         .route("/protected", get(protected_handler))
         .route("/protected-with-user", get(protected_with_user))
-        .layer(jwt_auth.layer().await.unwrap());
+        .layer(jwt_auth.jwt_source(source).layer().await.unwrap().auto_reject(auto_reject));
 
     Router::new().merge(pub_route).merge(protected_route)
 }
 
-fn init_test() {
+fn init_test() -> Arc<Stats> {
     INITIALIZED.call_once(|| {
         tracing_subscriber::registry()
             .with(tracing_subscriber::EnvFilter::new(
@@ -118,155 +134,226 @@ fn init_test() {
             .with(tracing_subscriber::fmt::layer())
             .init();
     });
-    // reset counters
-    Stats::reset();
+    Arc::new(Stats::new())
 }
 
-async fn make_proteced_request(app: &mut Router, bearer: &str) -> Response {
-    app.ready()
-        .await
-        .unwrap()
-        .call(
-            Request::builder()
-                .uri("/protected")
-                .header(AUTHORIZATION.as_str(), format!("Bearer {bearer}"))
-                .body(Body::empty())
-                .unwrap(),
+async fn make_request(app: &mut Router, req: Request<Body>) -> Response {
+    app.ready().await.unwrap().call(req).await.unwrap()
+}
+
+fn apply_token(b: Builder, source: JwtSource, token: Option<&str>) -> Builder {
+    match (source.clone(), token) {
+        (_, None) => b,
+        (JwtSource::Cookie(name), Some(token)) => b.header("Cookie", format!("{name}={token}")),
+        (JwtSource::AuthorizationHeader, Some(token)) => b.header("Authorization", format!("Bearer {token}")),
+    }
+}
+
+async fn make_protected_request(app: &mut Router, source: JwtSource, token: Option<&str>) -> Response {
+    make_request(
+        app,
+        apply_token(Request::builder().uri("/protected"), source, token)
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+}
+
+async fn make_protected_user_request(app: &mut Router, token: Option<&str>) -> Response {
+    make_request(
+        app,
+        apply_token(
+            Request::builder().uri("/protected-with-user"),
+            JwtSource::AuthorizationHeader,
+            token,
         )
-        .await
-        .unwrap()
+        .body(Body::empty())
+        .unwrap(),
+    )
+    .await
 }
 
 async fn make_public_request(app: &mut Router) -> Response {
-    app.ready()
-        .await
-        .unwrap()
-        .call(Request::builder().uri("/public").body(Body::empty()).unwrap())
-        .await
-        .unwrap()
+    make_request(app, Request::builder().uri("/public").body(Body::empty()).unwrap()).await
 }
 
 #[tokio::test]
-async fn sequential_tests() {
-    // these tests must be executed sequentially
-    scenario1().await;
-    scenario2().await;
-    scenario3().await;
-    scenario4().await;
-}
-
-async fn scenario1() {
-    init_test();
-    let url = run_jwks_server();
+async fn jwk() {
+    let stats = init_test();
+    let url = run_jwks_server(&stats);
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url);
-    let mut app = app(auth).await;
-    assert_eq!(1, Stats::discovery_counter());
-    assert_eq!(0, Stats::jwks_counter());
+    let source = JwtSource::AuthorizationHeader;
+    let mut app = app(auth, source.clone(), true).await;
+    assert_eq!(1, stats.discovery_counter());
+    assert_eq!(0, stats.jwks_counter());
     // NO LOADING when public request
     let r = make_public_request(&mut app).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(0, Stats::jwks_counter(), "sc1: public -> no loading");
+    assert_eq!(0, stats.jwks_counter(), "sc1: public -> no loading");
     // LOADING - first jwt check
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(1, Stats::jwks_counter(), "sc1: 1st check -> loading");
+    assert_eq!(1, stats.jwks_counter(), "sc1: 1st check -> loading");
     // NO RELOADING same kid with OK
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(1, Stats::jwks_counter(), "sc1: 2st check -> no loading");
+    assert_eq!(1, stats.jwks_counter(), "sc1: 2st check -> no loading");
     // NO RELEOADING, invalid kid, 401
-    let r = make_proteced_request(&mut app, JWT_RSA2_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA2_OK)).await;
     assert_eq!(StatusCode::UNAUTHORIZED, r.status());
-    assert_eq!(1, Stats::jwks_counter(), "sc1: 3st check (invalid kid) -> no loading");
+    assert_eq!(1, stats.jwks_counter(), "sc1: 3st check (invalid kid) -> no loading");
 }
 
 ///  SCENARIO2
 ///
 ///  Refresh strategy: INTERVAL
-async fn scenario2() {
-    init_test();
-    let url = run_jwks_server();
+#[tokio::test]
+async fn jwk_interval() {
+    let stats = init_test();
+    let url = run_jwks_server(&stats);
     let refresh = Refresh {
         refresh_interval: Duration::from_millis(40),
         retry_interval: Duration::from_millis(0),
         strategy: RefreshStrategy::Interval,
     };
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url).refresh(refresh);
-    let mut app = app(auth).await;
-    assert_eq!(1, Stats::discovery_counter());
-    assert_eq!(0, Stats::jwks_counter());
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let source = JwtSource::AuthorizationHeader;
+    let mut app = app(auth, source.clone(), true).await;
+    assert_eq!(1, stats.discovery_counter());
+    assert_eq!(0, stats.jwks_counter());
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(1, Stats::jwks_counter());
+    assert_eq!(1, stats.jwks_counter());
     // NO RELOADING same kid
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(1, Stats::jwks_counter());
+    assert_eq!(1, stats.jwks_counter());
     // RELEOADING, same kid, refresh_interval elapsed
     thread::sleep(Duration::from_millis(41));
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(2, Stats::jwks_counter());
+    assert_eq!(2, stats.jwks_counter());
 }
 
 ///  SCENARIO3
 ///
 ///  Refresh strategy: KeyNotFound
-async fn scenario3() {
-    init_test();
-    let url = run_jwks_server();
+#[tokio::test]
+async fn jwk_missing_key() {
+    let stats = init_test();
+    let url = run_jwks_server(&stats);
     let refresh = Refresh {
         strategy: RefreshStrategy::KeyNotFound,
         refresh_interval: Duration::from_millis(40),
         retry_interval: Duration::from_millis(0),
     };
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url).refresh(refresh);
-    let mut app = app(auth).await;
-    assert_eq!(1, Stats::discovery_counter());
-    assert_eq!(0, Stats::jwks_counter());
+    let source = JwtSource::AuthorizationHeader;
+    let mut app = app(auth, source.clone(), true).await;
+    assert_eq!(1, stats.discovery_counter());
+    assert_eq!(0, stats.jwks_counter());
     // RELOADING getting keys first time
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(1, Stats::jwks_counter());
+    assert_eq!(1, stats.jwks_counter());
     thread::sleep(Duration::from_millis(21));
     // NO RELOADING refresh interval elapsed, kid OK
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(1, Stats::jwks_counter());
+    assert_eq!(1, stats.jwks_counter());
     // RELEOADING, unknown kid, refresh_interval elapsed
     thread::sleep(Duration::from_millis(41));
-    let r = make_proteced_request(&mut app, JWT_RSA2_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA2_OK)).await;
     assert_eq!(StatusCode::UNAUTHORIZED, r.status());
-    assert_eq!(2, Stats::jwks_counter());
+    assert_eq!(2, stats.jwks_counter());
 }
 
 ///  SCENARIO4
 ///
 ///  Refresh strategy: NoRefresh
-async fn scenario4() {
-    init_test();
-    let url = run_jwks_server();
+#[tokio::test]
+async fn jwk_no_refresh() {
+    let stats = init_test();
+
+    let url = run_jwks_server(&stats);
     let refresh = Refresh {
         strategy: RefreshStrategy::NoRefresh,
         refresh_interval: Duration::from_millis(0),
         retry_interval: Duration::from_millis(0),
     };
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url).refresh(refresh);
-    let mut app = app(auth).await;
-    assert_eq!(1, Stats::discovery_counter());
-    assert_eq!(0, Stats::jwks_counter());
+    let source = JwtSource::AuthorizationHeader;
+    let mut app = app(auth, source.clone(), true).await;
+    assert_eq!(1, stats.discovery_counter());
+    assert_eq!(0, stats.jwks_counter());
     // RELOADING getting keys first time
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(1, Stats::jwks_counter());
+    assert_eq!(1, stats.jwks_counter());
     thread::sleep(Duration::from_millis(21));
     // NO RELOADING kid OK
-    let r = make_proteced_request(&mut app, JWT_RSA1_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
     assert_eq!(StatusCode::OK, r.status());
-    assert_eq!(1, Stats::jwks_counter());
+    assert_eq!(1, stats.jwks_counter());
     // NO RELEOADING, unknown kid
     thread::sleep(Duration::from_millis(41));
-    let r = make_proteced_request(&mut app, JWT_RSA2_OK).await;
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA2_OK)).await;
     assert_eq!(StatusCode::UNAUTHORIZED, r.status());
-    assert_eq!(1, Stats::jwks_counter());
+    assert_eq!(1, stats.jwks_counter());
+}
+
+/// SCENARIO5
+///
+/// Read token from cookie
+#[tokio::test]
+async fn cookie() {
+    let stats = init_test();
+    let url = run_jwks_server(&stats);
+    let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url);
+    let source = JwtSource::Cookie("jwk".to_string());
+    let mut app = app(auth, source.clone(), true).await;
+    assert_eq!(1, stats.discovery_counter());
+    assert_eq!(0, stats.jwks_counter());
+    // NO LOADING when public request
+    let r = make_public_request(&mut app).await;
+    assert_eq!(StatusCode::OK, r.status());
+    assert_eq!(0, stats.jwks_counter(), "sc1: public -> no loading");
+    // LOADING - first jwt check
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
+    assert_eq!(StatusCode::OK, r.status());
+    assert_eq!(1, stats.jwks_counter(), "sc1: 1st check -> loading");
+    // NO RELOADING same kid with OK
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
+    assert_eq!(StatusCode::OK, r.status());
+    assert_eq!(1, stats.jwks_counter(), "sc1: 2st check -> no loading");
+    // NO RELEOADING, invalid kid, 401
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA2_OK)).await;
+    assert_eq!(StatusCode::UNAUTHORIZED, r.status());
+    assert_eq!(1, stats.jwks_counter(), "sc1: 3st check (invalid kid) -> no loading");
+}
+
+/// SCENARIO6
+///
+/// Do not auto-reject missing tokens when there is no extractor for it
+#[tokio::test]
+async fn auto_reject() {
+    let stats = init_test();
+    let url = run_jwks_server(&stats);
+    let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url);
+    let source = JwtSource::AuthorizationHeader;
+    let mut app = app(auth, source.clone(), false).await;
+    assert_eq!(1, stats.discovery_counter());
+    assert_eq!(0, stats.jwks_counter());
+
+    let r = make_public_request(&mut app).await;
+    assert_eq!(StatusCode::OK, r.status());
+    assert_eq!(0, stats.jwks_counter(), "sc1: public -> no loading");
+
+    let r = make_protected_user_request(&mut app, None).await;
+    assert_eq!(StatusCode::UNAUTHORIZED, r.status());
+    assert_eq!(0, stats.jwks_counter(), "sc1: 1st check -> loading");
+
+    let r = make_protected_request(&mut app, source.clone(), Some(JWT_RSA1_OK)).await;
+    assert_eq!(StatusCode::OK, r.status());
+    assert_eq!(1, stats.jwks_counter(), "sc1: 1st check -> loading");
 }
