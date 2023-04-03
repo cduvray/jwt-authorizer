@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.9.0 (2023-04-14)
+
+### Added
+
+- Other sources for jwt token are configurable (#10)
+  - Cookie
+  - AuthorizationHeader (default)
+- Raw PEM file content as an input for JwtAuthorizer (#15)
+
+### Changed
+
+- Remove 'static lifetime requirement (#8)
+
 ## 0.8.1 (2023-03-16)
 
 No public API changes, no new features.
