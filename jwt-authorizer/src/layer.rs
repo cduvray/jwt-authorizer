@@ -11,7 +11,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use tower_cookies::Cookies;
 use tower_layer::Layer;
 use tower_service::Service;
 
@@ -222,8 +221,8 @@ where
                 bearer_o.map(|b| String::from(b.0.token()))
             }
             layer::JwtSource::Cookie(name) => {
-                if let Some(c) = request.extensions().get::<Cookies>() {
-                    c.get(name.as_str()).map(|c| String::from(c.value()))
+                if let Some(c) = h.typed_get::<headers::Cookie>() {
+                    c.get(name.as_str()).map(String::from)
                 } else {
                     tracing::warn!(
                         "You have to add the tower_cookies::CookieManagerLayer middleware to use Cookies as JWT source."
