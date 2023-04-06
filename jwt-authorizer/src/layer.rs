@@ -220,16 +220,9 @@ where
                 let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
                 bearer_o.map(|b| String::from(b.0.token()))
             }
-            layer::JwtSource::Cookie(name) => {
-                if let Some(c) = h.typed_get::<headers::Cookie>() {
-                    c.get(name.as_str()).map(String::from)
-                } else {
-                    tracing::warn!(
-                        "You have to add the tower_cookies::CookieManagerLayer middleware to use Cookies as JWT source."
-                    );
-                    None
-                }
-            }
+            layer::JwtSource::Cookie(name) => h
+                .typed_get::<headers::Cookie>()
+                .and_then(|c| c.get(name.as_str()).map(String::from)),
         };
         Box::pin(async move {
             if let Some(token) = token {
