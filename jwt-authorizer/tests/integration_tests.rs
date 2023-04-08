@@ -9,9 +9,9 @@ use std::{
 };
 
 use axum::{response::Response, routing::get, Json, Router};
-use http::{Request, StatusCode};
+use http::{header::AUTHORIZATION, Request, StatusCode};
 use hyper::Body;
-use jwt_authorizer::{layer::JwtSource, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
+use jwt_authorizer::{JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -129,7 +129,7 @@ async fn make_proteced_request(app: &mut Router, bearer: &str) -> Response {
         .call(
             Request::builder()
                 .uri("/protected")
-                .header("Authorization", format!("Bearer {bearer}"))
+                .header(AUTHORIZATION.as_str(), format!("Bearer {bearer}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -153,7 +153,6 @@ async fn sequential_tests() {
     scenario2().await;
     scenario3().await;
     scenario4().await;
-    cookie_jwt_source().await;
 }
 
 async fn scenario1() {
@@ -270,29 +269,4 @@ async fn scenario4() {
     let r = make_proteced_request(&mut app, JWT_RSA2_OK).await;
     assert_eq!(StatusCode::UNAUTHORIZED, r.status());
     assert_eq!(1, Stats::jwks_counter());
-}
-
-///  Cookie JWT Source
-///
-async fn cookie_jwt_source() {
-    init_test();
-    let url = run_jwks_server();
-    let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url).jwt_source(JwtSource::Cookie("auth_jwt".to_owned()));
-    let mut app = app(auth).await;
-
-    let r = app
-        .ready()
-        .await
-        .unwrap()
-        .call(
-            Request::builder()
-                .uri("/protected")
-                .header(http::header::COOKIE, format!("auth_jwt={}", JWT_RSA1_OK))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(r.status(), StatusCode::OK);
 }
