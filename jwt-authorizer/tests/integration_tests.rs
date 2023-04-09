@@ -9,7 +9,7 @@ use std::{
 };
 
 use axum::{response::Response, routing::get, Json, Router};
-use http::{Request, StatusCode};
+use http::{header::AUTHORIZATION, Request, StatusCode};
 use hyper::Body;
 use jwt_authorizer::{JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
 use lazy_static::lazy_static;
@@ -129,7 +129,7 @@ async fn make_proteced_request(app: &mut Router, bearer: &str) -> Response {
         .call(
             Request::builder()
                 .uri("/protected")
-                .header("Authorization", format!("Bearer {bearer}"))
+                .header(AUTHORIZATION.as_str(), format!("Bearer {bearer}"))
                 .body(Body::empty())
                 .unwrap(),
         )

@@ -11,7 +11,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use tower_cookies::Cookies;
 use tower_layer::Layer;
 use tower_service::Service;
 
@@ -33,7 +32,7 @@ where
     refresh: Option<Refresh>,
     claims_checker: Option<FnClaimsChecker<C>>,
     validation: Option<Validation>,
-    pub jwt_source: JwtSource,
+    jwt_source: JwtSource,
 }
 
 /// authorization layer builder
@@ -48,7 +47,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -59,7 +58,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -70,7 +69,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -81,7 +80,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -92,7 +91,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -103,7 +102,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -114,7 +113,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -125,7 +124,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -136,7 +135,7 @@ where
             refresh: Default::default(),
             claims_checker: None,
             validation: None,
-            jwt_source: JwtSource::Bearer,
+            jwt_source: JwtSource::AuthorizationHeader,
         }
     }
 
@@ -175,6 +174,9 @@ where
         self
     }
 
+    /// configures the source of the bearer token
+    ///
+    /// (default: AuthorizationHeader)
     pub fn jwt_source(mut self, src: JwtSource) -> JwtAuthorizer<C> {
         self.jwt_source = src;
 
@@ -214,20 +216,13 @@ where
         let h = request.headers();
 
         let token = match &self.jwt_source {
-            layer::JwtSource::Bearer => {
+            layer::JwtSource::AuthorizationHeader => {
                 let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
                 bearer_o.map(|b| String::from(b.0.token()))
             }
-            layer::JwtSource::Cookie(name) => {
-                if let Some(c) = request.extensions().get::<Cookies>() {
-                    c.get(name.as_str()).map(|c| String::from(c.value()))
-                } else {
-                    tracing::warn!(
-                        "You have to add the tower_cookies::CookieManagerLayer middleware to use Cookies as JWT source."
-                    );
-                    None
-                }
-            }
+            layer::JwtSource::Cookie(name) => h
+                .typed_get::<headers::Cookie>()
+                .and_then(|c| c.get(name.as_str()).map(String::from)),
         };
         Box::pin(async move {
             if let Some(token) = token {
@@ -281,10 +276,19 @@ where
 
 // ----------  AsyncAuthorizationService  --------
 
+/// Source of the bearer token
 #[derive(Clone)]
 pub enum JwtSource {
-    Bearer,
+    /// Storing the bearer token in Authorization header
+    ///
+    /// (default)
+    AuthorizationHeader,
+    /// Cookies
+    ///
+    /// (be careful when using cookies, some precautions must be taken, cf. RFC6750)
     Cookie(String),
+    // TODO: "Form-Encoded Content Parameter" may be added in the future (OAuth 2.1 / 5.2.1.2)
+    // FormParam,
 }
 
 #[derive(Clone)]
