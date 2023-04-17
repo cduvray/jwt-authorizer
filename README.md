@@ -1,6 +1,6 @@
 # jwt-authorizer
 
-JWT authorizer Layer for Axum.
+JWT authorizer Layer for Axum and Tonic.
 
 [![Build status](https://github.com/cduvray/jwt-authorizer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tokio-rs/cduvray/jwt-authorizer/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/jwt-authorizer)](https://crates.io/crates/jwt-authorizer)
