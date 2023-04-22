@@ -342,6 +342,9 @@ where
 
     fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
         let inner = self.inner.clone();
+        // take the service that was ready
+        let inner = std::mem::replace(&mut self.inner, inner);
+
         let auth_fut = self.authorize(req);
 
         ResponseFuture {
