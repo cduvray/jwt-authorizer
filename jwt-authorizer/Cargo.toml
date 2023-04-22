@@ -33,7 +33,7 @@ tonic = { version = "0.9.2", optional = true }
 hyper = { version = "0.14", features = ["full"] }
 lazy_static = "1.4.0"
 prost = "0.11.9"
-tower = { version = "0.4", features = ["util"] }
+tower = { version = "0.4", features = ["util", "buffer"] }
 wiremock = "0.5"
 
 [[test]]

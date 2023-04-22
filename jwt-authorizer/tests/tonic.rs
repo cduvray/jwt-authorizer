@@ -6,7 +6,7 @@ use http::header::AUTHORIZATION;
 use jwt_authorizer::{layer::AsyncAuthorizationService, JwtAuthorizer};
 use serde::{Deserialize, Serialize};
 use tonic::{server::UnaryService, transport::NamedService, IntoRequest, Status};
-use tower::Service;
+use tower::{buffer::Buffer, Service};
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -82,10 +82,11 @@ impl NamedService for GreeterServer {
 async fn app(
     jwt_auth: JwtAuthorizer<User>,
     expected_sub: String,
-) -> AsyncAuthorizationService<tonic::transport::server::Routes, User> {
+) -> AsyncAuthorizationService<Buffer<tonic::transport::server::Routes, http::Request<tonic::transport::Body>>, User> {
     let layer = jwt_auth.layer().await.unwrap();
     tonic::transport::Server::builder()
         .layer(layer)
+        .layer(tower::buffer::BufferLayer::new(1))
         .add_service(GreeterServer { expected_sub })
         .into_service()
 }

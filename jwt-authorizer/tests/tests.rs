@@ -2,17 +2,19 @@ mod common;
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
+
     use axum::{
         body::Body,
         http::{Request, StatusCode},
         response::Response,
         routing::get,
-        Router,
+        BoxError, Router,
     };
     use http::{header, HeaderValue};
     use jwt_authorizer::{layer::JwtSource, validation::Validation, JwtAuthorizer, JwtClaims};
     use serde::Deserialize;
-    use tower::ServiceExt;
+    use tower::{util::MapErrLayer, ServiceExt};
 
     use crate::common;
 
@@ -24,8 +26,15 @@ mod tests {
     async fn app(jwt_auth: JwtAuthorizer<User>) -> Router {
         Router::new().route("/public", get(|| async { "hello" })).route(
             "/protected",
-            get(|JwtClaims(user): JwtClaims<User>| async move { format!("hello: {}", user.sub) })
-                .layer(jwt_auth.layer().await.unwrap()),
+            get(|JwtClaims(user): JwtClaims<User>| async move { format!("hello: {}", user.sub) }).layer(
+                tower_layer::Stack::new(
+                    tower_layer::Stack::new(
+                        tower::buffer::BufferLayer::new(1),
+                        MapErrLayer::new(|e: BoxError| -> Infallible { panic!("{}", e) }),
+                    ),
+                    jwt_auth.layer().await.unwrap(),
+                ),
+            ),
         )
     }
 
