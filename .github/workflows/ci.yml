@@ -70,5 +70,8 @@ jobs:
     - name: Run tests default features
       run: cargo test
 
+    - name: Run tests all features
+      run: cargo test --all-features
+
     - name: Run tests no features
       run: cargo test --no-default-features

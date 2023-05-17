@@ -1,6 +1,6 @@
 # jwt-authorizer
 
-JWT authoriser Layer for Axum.
+JWT authoriser Layer for Axum and Tonic.
 
 ## Features
 

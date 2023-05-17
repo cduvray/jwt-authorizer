@@ -1,6 +1,4 @@
-use axum::body::BoxBody;
 use axum::http::Request;
-use axum::response::{IntoResponse, Response};
 use futures_core::ready;
 use futures_util::future::BoxFuture;
 use headers::authorization::Bearer;
@@ -193,8 +191,7 @@ where
 /// Trait for authorizing requests.
 pub trait AsyncAuthorizer<B> {
     type RequestBody;
-    type ResponseBody;
-    type Future: Future<Output = Result<Request<Self::RequestBody>, Response<Self::ResponseBody>>>;
+    type Future: Future<Output = Result<Request<Self::RequestBody>, AuthError>>;
 
     /// Authorize the request.
     ///
@@ -208,8 +205,7 @@ where
     C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
     type RequestBody = B;
-    type ResponseBody = BoxBody;
-    type Future = BoxFuture<'static, Result<Request<B>, Response<Self::ResponseBody>>>;
+    type Future = BoxFuture<'static, Result<Request<B>, AuthError>>;
 
     fn authorize(&self, mut request: Request<B>) -> Self::Future {
         let authorizer = self.auth.clone();
@@ -226,18 +222,15 @@ where
         };
         Box::pin(async move {
             if let Some(token) = token {
-                match authorizer.check_auth(token.as_str()).await {
-                    Ok(token_data) => {
-                        // Set `token_data` as a request extension so it can be accessed by other
-                        // services down the stack.
-                        request.extensions_mut().insert(token_data);
+                authorizer.check_auth(token.as_str()).await.map(|token_data| {
+                    // Set `token_data` as a request extension so it can be accessed by other
+                    // services down the stack.
+                    request.extensions_mut().insert(token_data);
 
-                        Ok(request)
-                    }
-                    Err(err) => Err(err.into_response()),
-                }
+                    request
+                })
             } else {
-                Err(AuthError::MissingToken().into_response())
+                Err(AuthError::MissingToken())
             }
         })
     }
@@ -335,7 +328,8 @@ where
 impl<ReqBody, S, C> Service<Request<ReqBody>> for AsyncAuthorizationService<S, C>
 where
     ReqBody: Send + Sync + 'static,
-    S: Service<Request<ReqBody>, Response = Response> + Clone,
+    S: Service<Request<ReqBody>> + Clone,
+    S::Response: From<AuthError>,
     C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
     type Response = S::Response;
@@ -348,6 +342,9 @@ where
 
     fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
         let inner = self.inner.clone();
+        // take the service that was ready
+        let inner = std::mem::replace(&mut self.inner, inner);
+
         let auth_fut = self.authorize(req);
 
         ResponseFuture {
@@ -361,7 +358,7 @@ where
 /// Response future for [`AsyncAuthorizationService`].
 pub struct ResponseFuture<S, ReqBody, C>
 where
-    S: Service<Request<ReqBody>, Response = Response>,
+    S: Service<Request<ReqBody>>,
     ReqBody: Send + Sync + 'static,
     C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
@@ -384,7 +381,8 @@ enum State<A, SFut> {
 
 impl<S, ReqBody, C> Future for ResponseFuture<S, ReqBody, C>
 where
-    S: Service<Request<ReqBody>, Response = Response>,
+    S: Service<Request<ReqBody>>,
+    S::Response: From<AuthError>,
     ReqBody: Send + Sync + 'static,
     C: Clone + DeserializeOwned + Send + Sync,
 {
@@ -404,7 +402,7 @@ where
                         }
                         Err(res) => {
                             tracing::info!("err: {:?}", res);
-                            return Poll::Ready(Ok(res));
+                            return Poll::Ready(Ok(res.into()));
                         }
                     };
                 }
