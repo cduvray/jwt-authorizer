@@ -11,6 +11,7 @@ keywords = ["jwt","axum","authorisation","jwks"]
 
 [dependencies]
 axum = { version = "0.6", features = ["headers"] }
+chrono = "0.4"
 futures-util = "0.3"
 futures-core = "0.3"
 headers = "0.3"
