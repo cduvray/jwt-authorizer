@@ -13,6 +13,7 @@ use tower_layer::Layer;
 use tower_service::Service;
 
 use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
+use crate::claims::RegisteredClaims;
 use crate::error::InitError;
 use crate::jwks::key_store_manager::Refresh;
 use crate::validation::Validation;
@@ -22,7 +23,7 @@ use crate::{layer, AuthError, RefreshStrategy};
 ///
 /// - initialisation of the Authorizer from jwks, rsa, ed, ec or secret
 /// - can define a checker (jwt claims check)
-pub struct JwtAuthorizer<C>
+pub struct JwtAuthorizer<C = RegisteredClaims>
 where
     C: Clone + DeserializeOwned,
 {
