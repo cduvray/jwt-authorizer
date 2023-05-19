@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+## 0.10.0 (2023-05-19)
+
+- tonic services support
+- choices of TLS support (corresponding to underlying reqwest crate features)
+- `RegisteredClaims` added (representing RFC7519 registered claims), used as default for `JwtAuthorizer`
+
 ## 0.9.0 (2023-04-14)
 
 ### Added
