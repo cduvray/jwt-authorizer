@@ -159,6 +159,7 @@ async fn scenario1() {
     init_test();
     let url = run_jwks_server();
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url);
+
     let mut app = app(auth).await;
     assert_eq!(1, Stats::discovery_counter());
     assert_eq!(0, Stats::jwks_counter());

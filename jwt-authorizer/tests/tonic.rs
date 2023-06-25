@@ -1,9 +1,16 @@
-use std::{sync::Once, task::Poll};
+use std::{
+    sync::{Arc, Once},
+    task::Poll,
+};
 
 use axum::body::HttpBody;
 use futures_core::future::BoxFuture;
 use http::header::AUTHORIZATION;
-use jwt_authorizer::{layer::AsyncAuthorizationService, JwtAuthorizer};
+use jwt_authorizer::{
+    authorizer::{Authorize, Authorizer},
+    layer::AsyncAuthorizationService,
+    JwtAuthorizer,
+};
 use serde::{Deserialize, Serialize};
 use tonic::{server::UnaryService, transport::NamedService, IntoRequest, Status};
 use tower::{buffer::Buffer, Service};
@@ -82,7 +89,10 @@ impl NamedService for GreeterServer {
 async fn app(
     jwt_auth: JwtAuthorizer<User>,
     expected_sub: String,
-) -> AsyncAuthorizationService<Buffer<tonic::transport::server::Routes, http::Request<tonic::transport::Body>>, User> {
+) -> AsyncAuthorizationService<
+    Buffer<tonic::transport::server::Routes, http::Request<tonic::transport::Body>>,
+    Arc<Authorizer<User>>,
+> {
     let layer = jwt_auth.layer().await.unwrap();
     tonic::transport::Server::builder()
         .layer(layer)
@@ -143,12 +153,13 @@ where
     }
 }
 
-async fn make_protected_request<S: Clone>(
-    app: AsyncAuthorizationService<S, User>,
+async fn make_protected_request<A, S: Clone>(
+    app: AsyncAuthorizationService<S, A>,
     bearer: Option<&str>,
     message: &str,
 ) -> Result<tonic::Response<HelloMessage>, Status>
 where
+    A: Clone + Authorize + Send + Sync + 'static,
     S: Service<
             http::Request<tonic::transport::Body>,
             Response = http::Response<tonic::body::BoxBody>,

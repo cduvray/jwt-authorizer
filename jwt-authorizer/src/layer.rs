@@ -4,191 +4,47 @@ use futures_util::future::BoxFuture;
 use headers::authorization::Bearer;
 use headers::{Authorization, HeaderMapExt};
 use pin_project::pin_project;
-use serde::de::DeserializeOwned;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower_layer::Layer;
 use tower_service::Service;
 
-use crate::authorizer::{Authorizer, FnClaimsChecker, KeySourceType};
-use crate::claims::RegisteredClaims;
-use crate::error::InitError;
-use crate::jwks::key_store_manager::Refresh;
-use crate::validation::Validation;
-use crate::{layer, AuthError, RefreshStrategy};
+use crate::authorizer::Authorize;
+use crate::{layer, AuthError};
 
 /// Authorizer Layer builder
-///
-/// - initialisation of the Authorizer from jwks, rsa, ed, ec or secret
-/// - can define a checker (jwt claims check)
-pub struct JwtAuthorizer<C = RegisteredClaims>
-where
-    C: Clone + DeserializeOwned,
-{
-    key_source_type: KeySourceType,
-    refresh: Option<Refresh>,
-    claims_checker: Option<FnClaimsChecker<C>>,
-    validation: Option<Validation>,
+pub struct AsyncAuthorizationLayerBuilder<A> {
+    auth: A,
     jwt_source: JwtSource,
 }
 
 /// authorization layer builder
-impl<C> JwtAuthorizer<C>
+impl<A> AsyncAuthorizationLayerBuilder<A>
 where
-    C: Clone + DeserializeOwned + Send + Sync,
+    A: Clone + Authorize + Send + Sync + 'static,
 {
-    /// Builds Authorizer Layer from a OpenId Connect discover metadata
-    pub fn from_oidc(issuer: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::Discovery(issuer.to_string()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
+    pub fn new(auth: A) -> Self {
+        AsyncAuthorizationLayerBuilder {
+            auth,
+            jwt_source: JwtSource::default(),
         }
     }
-
-    /// Builds Authorizer Layer from a JWKS endpoint
-    pub fn from_jwks_url(url: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::Jwks(url.to_owned()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
-        }
-    }
-
-    /// Builds Authorizer Layer from a RSA PEM file
-    pub fn from_rsa_pem(path: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::RSA(path.to_owned()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
-        }
-    }
-
-    /// Builds Authorizer Layer from an RSA PEM raw text
-    pub fn from_rsa_pem_text(text: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::RSAString(text.to_owned()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
-        }
-    }
-
-    /// Builds Authorizer Layer from a EC PEM file
-    pub fn from_ec_pem(path: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::EC(path.to_owned()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
-        }
-    }
-
-    /// Builds Authorizer Layer from a EC PEM raw text
-    pub fn from_ec_pem_text(text: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::ECString(text.to_owned()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
-        }
-    }
-
-    /// Builds Authorizer Layer from a EC PEM file
-    pub fn from_ed_pem(path: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::ED(path.to_owned()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
-        }
-    }
-
-    /// Builds Authorizer Layer from a EC PEM raw text
-    pub fn from_ed_pem_text(text: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::EDString(text.to_owned()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
-        }
-    }
-
-    /// Builds Authorizer Layer from a secret phrase
-    pub fn from_secret(secret: &str) -> JwtAuthorizer<C> {
-        JwtAuthorizer {
-            key_source_type: KeySourceType::Secret(secret.to_owned()),
-            refresh: Default::default(),
-            claims_checker: None,
-            validation: None,
-            jwt_source: JwtSource::AuthorizationHeader,
-        }
-    }
-
-    /// Refreshes configuration for jwk store
-    pub fn refresh(mut self, refresh: Refresh) -> JwtAuthorizer<C> {
-        if self.refresh.is_some() {
-            tracing::warn!("More than one refresh configuration found!");
-        }
-        self.refresh = Some(refresh);
-        self
-    }
-
-    /// no refresh, jwks will be loaded juste once
-    pub fn no_refresh(mut self) -> JwtAuthorizer<C> {
-        if self.refresh.is_some() {
-            tracing::warn!("More than one refresh configuration found!");
-        }
-        self.refresh = Some(Refresh {
-            strategy: RefreshStrategy::NoRefresh,
-            ..Default::default()
-        });
-        self
-    }
-
-    /// configures token content check (custom function), if false a 403 will be sent.
-    /// (AuthError::InvalidClaims())
-    pub fn check(mut self, checker_fn: fn(&C) -> bool) -> JwtAuthorizer<C> {
-        self.claims_checker = Some(FnClaimsChecker { checker_fn });
-
-        self
-    }
-
-    pub fn validation(mut self, validation: Validation) -> JwtAuthorizer<C> {
-        self.validation = Some(validation);
-
-        self
-    }
-
     /// configures the source of the bearer token
     ///
     /// (default: AuthorizationHeader)
-    pub fn jwt_source(mut self, src: JwtSource) -> JwtAuthorizer<C> {
+    pub fn jwt_source(mut self, src: JwtSource) -> Self {
         self.jwt_source = src;
 
         self
     }
 
     /// Build axum layer
-    pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
-        let val = self.validation.unwrap_or_default();
-        let auth = Arc::new(Authorizer::build(&self.key_source_type, self.claims_checker, self.refresh, val).await?);
-        Ok(AsyncAuthorizationLayer::new(auth, self.jwt_source))
+    pub fn build(self) -> AsyncAuthorizationLayer<A> {
+        AsyncAuthorizationLayer::new(self.auth, self.jwt_source)
     }
 }
+
 /// Trait for authorizing requests.
 pub trait AsyncAuthorizer<B> {
     type RequestBody;
@@ -200,10 +56,10 @@ pub trait AsyncAuthorizer<B> {
     fn authorize(&self, request: Request<B>) -> Self::Future;
 }
 
-impl<B, S, C> AsyncAuthorizer<B> for AsyncAuthorizationService<S, C>
+impl<A, B, S> AsyncAuthorizer<B> for AsyncAuthorizationService<S, A>
 where
     B: Send + Sync + 'static,
-    C: Clone + DeserializeOwned + Send + Sync + 'static,
+    A: Clone + Authorize + Send + Sync + 'static,
 {
     type RequestBody = B;
     type Future = BoxFuture<'static, Result<Request<B>, AuthError>>;
@@ -240,28 +96,28 @@ where
 // -------------- Layer -----------------
 
 #[derive(Clone)]
-pub struct AsyncAuthorizationLayer<C>
+pub struct AsyncAuthorizationLayer<A>
 where
-    C: Clone + DeserializeOwned + Send,
+    A: Clone + Authorize,
 {
-    auth: Arc<Authorizer<C>>,
+    auth: A,
     jwt_source: JwtSource,
 }
 
-impl<C> AsyncAuthorizationLayer<C>
+impl<A> AsyncAuthorizationLayer<A>
 where
-    C: Clone + DeserializeOwned + Send,
+    A: Clone + Authorize,
 {
-    pub fn new(auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationLayer<C> {
+    pub fn new(auth: A, jwt_source: JwtSource) -> AsyncAuthorizationLayer<A> {
         Self { auth, jwt_source }
     }
 }
 
-impl<S, C> Layer<S> for AsyncAuthorizationLayer<C>
+impl<A, S> Layer<S> for AsyncAuthorizationLayer<A>
 where
-    C: Clone + DeserializeOwned + Send + Sync,
+    A: Clone + Authorize,
 {
-    type Service = AsyncAuthorizationService<S, C>;
+    type Service = AsyncAuthorizationService<S, A>;
 
     fn layer(&self, inner: S) -> Self::Service {
         AsyncAuthorizationService::new(inner, self.auth.clone(), self.jwt_source.clone())
@@ -271,11 +127,12 @@ where
 // ----------  AsyncAuthorizationService  --------
 
 /// Source of the bearer token
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum JwtSource {
     /// Storing the bearer token in Authorization header
     ///
     /// (default)
+    #[default]
     AuthorizationHeader,
     /// Cookies
     ///
@@ -286,18 +143,18 @@ pub enum JwtSource {
 }
 
 #[derive(Clone)]
-pub struct AsyncAuthorizationService<S, C>
+pub struct AsyncAuthorizationService<S, A>
 where
-    C: Clone + DeserializeOwned + Send + Sync,
+    A: Clone + Authorize,
 {
     pub inner: S,
-    pub auth: Arc<Authorizer<C>>,
+    pub auth: A,
     pub jwt_source: JwtSource,
 }
 
-impl<S, C> AsyncAuthorizationService<S, C>
+impl<S, A> AsyncAuthorizationService<S, A>
 where
-    C: Clone + DeserializeOwned + Send + Sync,
+    A: Clone + Authorize,
 {
     pub fn get_ref(&self) -> &S {
         &self.inner
@@ -314,28 +171,28 @@ where
     }
 }
 
-impl<S, C> AsyncAuthorizationService<S, C>
+impl<A, S> AsyncAuthorizationService<S, A>
 where
-    C: Clone + DeserializeOwned + Send + Sync,
+    A: Clone + Authorize,
 {
     /// Authorize requests using a custom scheme.
     ///
     /// The `Authorization` header is required to have the value provided.
-    pub fn new(inner: S, auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
+    pub fn new(inner: S, auth: A, jwt_source: JwtSource) -> AsyncAuthorizationService<S, A> {
         Self { inner, auth, jwt_source }
     }
 }
 
-impl<ReqBody, S, C> Service<Request<ReqBody>> for AsyncAuthorizationService<S, C>
+impl<ReqBody, S, A> Service<Request<ReqBody>> for AsyncAuthorizationService<S, A>
 where
     ReqBody: Send + Sync + 'static,
+    A: Clone + Authorize + Send + Sync + 'static,
     S: Service<Request<ReqBody>> + Clone,
     S::Response: From<AuthError>,
-    C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = ResponseFuture<S, ReqBody, C>;
+    type Future = ResponseFuture<S, ReqBody, A>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -357,14 +214,14 @@ where
 
 #[pin_project]
 /// Response future for [`AsyncAuthorizationService`].
-pub struct ResponseFuture<S, ReqBody, C>
+pub struct ResponseFuture<S, ReqBody, A>
 where
+    A: Clone + Authorize + Send + Sync + 'static,
     S: Service<Request<ReqBody>>,
     ReqBody: Send + Sync + 'static,
-    C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
     #[pin]
-    state: State<<AsyncAuthorizationService<S, C> as AsyncAuthorizer<ReqBody>>::Future, S::Future>,
+    state: State<<AsyncAuthorizationService<S, A> as AsyncAuthorizer<ReqBody>>::Future, S::Future>,
     service: S,
 }
 
@@ -380,12 +237,12 @@ enum State<A, SFut> {
     },
 }
 
-impl<S, ReqBody, C> Future for ResponseFuture<S, ReqBody, C>
+impl<S, ReqBody, A> Future for ResponseFuture<S, ReqBody, A>
 where
+    A: Clone + Authorize + Send + Sync,
     S: Service<Request<ReqBody>>,
     S::Response: From<AuthError>,
     ReqBody: Send + Sync + 'static,
-    C: Clone + DeserializeOwned + Send + Sync,
 {
     type Output = Result<S::Response, S::Error>;
 

@@ -102,5 +102,5 @@ By default the jwks keys are reloaded when a request token is signed with a key 
 - [`JwtAuthorizer::refresh(refresh_configuration)`] allows to define a finer configuration for jwks refreshing, for more details see the documentation of `Refresh` struct.
 
 [`jwt-authorizer::Validation`]: https://docs.rs/jwt-authorizer/latest/jwt_authorizer/validation/struct.Validation.html
-[`JwtAuthorizer::no_refresh()`]: https://docs.rs/jwt-authorizer/latest/jwt_authorizer/layer/struct.JwtAuthorizer.html#method.no_refresh
-[`JwtAuthorizer::refresh(refresh_configuration)`]: https://docs.rs/jwt-authorizer/latest/jwt_authorizer/layer/struct.JwtAuthorizer.html#method.refresh
+[`JwtAuthorizer::no_refresh()`]: https://docs.rs/jwt-authorizer/latest/jwt_authorizer/authorizer/struct.JwtAuthorizer.html#method.no_refresh
+[`JwtAuthorizer::refresh(refresh_configuration)`]: https://docs.rs/jwt-authorizer/latest/jwt_authorizer/authorizer/struct.JwtAuthorizer.html#method.refresh

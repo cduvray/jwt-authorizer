@@ -1,5 +1,7 @@
 use std::{io::Read, sync::Arc};
 
+use axum::async_trait;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use jsonwebtoken::{decode, decode_header, jwk::JwkSet, Algorithm, DecodingKey, TokenData};
 use reqwest::Url;
 use serde::de::DeserializeOwned;
@@ -7,8 +9,170 @@ use serde::de::DeserializeOwned;
 use crate::{
     error::{AuthError, InitError},
     jwks::{key_store_manager::KeyStoreManager, KeyData, KeySource},
-    oidc, Refresh,
+    layer::{AsyncAuthorizationLayer, AsyncAuthorizationLayerBuilder, JwtSource},
+    oidc, Refresh, RefreshStrategy, RegisteredClaims, Validation,
 };
+
+/// Authorizer builder
+///
+/// - initialisation of the Authorizer from jwks, rsa, ed, ec or secret
+/// - can define a checker (jwt claims check)
+pub struct JwtAuthorizer<C = RegisteredClaims>
+where
+    C: Clone + DeserializeOwned,
+{
+    key_source_type: KeySourceType,
+    refresh: Option<Refresh>,
+    claims_checker: Option<FnClaimsChecker<C>>,
+    validation: Option<Validation>,
+}
+
+/// authorization layer builder
+impl<C> JwtAuthorizer<C>
+where
+    C: Clone + DeserializeOwned + Send + Sync + 'static,
+{
+    /// Builds Authorizer Layer from a OpenId Connect discover metadata
+    pub fn from_oidc(issuer: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::Discovery(issuer.to_string()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a JWKS endpoint
+    pub fn from_jwks_url(url: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::Jwks(url.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a RSA PEM file
+    pub fn from_rsa_pem(path: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::RSA(path.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from an RSA PEM raw text
+    pub fn from_rsa_pem_text(text: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::RSAString(text.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a EC PEM file
+    pub fn from_ec_pem(path: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::EC(path.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a EC PEM raw text
+    pub fn from_ec_pem_text(text: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::ECString(text.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a EC PEM file
+    pub fn from_ed_pem(path: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::ED(path.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a EC PEM raw text
+    pub fn from_ed_pem_text(text: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::EDString(text.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Builds Authorizer Layer from a secret phrase
+    pub fn from_secret(secret: &str) -> JwtAuthorizer<C> {
+        JwtAuthorizer {
+            key_source_type: KeySourceType::Secret(secret.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+        }
+    }
+
+    /// Refreshes configuration for jwk store
+    pub fn refresh(mut self, refresh: Refresh) -> JwtAuthorizer<C> {
+        if self.refresh.is_some() {
+            tracing::warn!("More than one refresh configuration found!");
+        }
+        self.refresh = Some(refresh);
+        self
+    }
+
+    /// no refresh, jwks will be loaded juste once
+    pub fn no_refresh(mut self) -> JwtAuthorizer<C> {
+        if self.refresh.is_some() {
+            tracing::warn!("More than one refresh configuration found!");
+        }
+        self.refresh = Some(Refresh {
+            strategy: RefreshStrategy::NoRefresh,
+            ..Default::default()
+        });
+        self
+    }
+
+    /// configures token content check (custom function), if false a 403 will be sent.
+    /// (AuthError::InvalidClaims())
+    pub fn check(mut self, checker_fn: fn(&C) -> bool) -> JwtAuthorizer<C> {
+        self.claims_checker = Some(FnClaimsChecker { checker_fn });
+
+        self
+    }
+
+    pub fn validation(mut self, validation: Validation) -> JwtAuthorizer<C> {
+        self.validation = Some(validation);
+
+        self
+    }
+
+    /// Build authorizer
+    pub async fn build(self) -> Result<Authorizer<C>, InitError> {
+        let val = self.validation.unwrap_or_default();
+        Authorizer::build(&self.key_source_type, self.claims_checker, self.refresh, val).await
+    }
+
+    pub async fn layer(self) -> Result<AsyncAuthorizationLayer<Arc<Authorizer<C>>>, InitError> {
+        let auth = self.build().await?;
+        Ok(AsyncAuthorizationLayer::new(Arc::new(auth), JwtSource::default()))
+    }
+
+    pub async fn layer_builder(self) -> Result<AsyncAuthorizationLayerBuilder<Arc<Authorizer<C>>>, InitError> {
+        let auth = self.build().await?;
+        Ok(AsyncAuthorizationLayerBuilder::new(Arc::new(auth)))
+    }
+}
 
 pub trait ClaimsChecker<C> {
     fn check(&self, claims: &C) -> bool;
@@ -188,8 +352,21 @@ where
             }
         })
     }
+}
 
-    pub async fn check_auth(&self, token: &str) -> Result<TokenData<C>, AuthError> {
+#[async_trait]
+pub trait Authorize: Send + Sync {
+    type Claims: Send + Sync;
+    async fn check_auth(&self, token: &str) -> Result<TokenData<Self::Claims>, AuthError>;
+}
+
+#[async_trait]
+impl<C> Authorize for Authorizer<C>
+where
+    C: DeserializeOwned + Clone + Send + Sync,
+{
+    type Claims = C;
+    async fn check_auth(&self, token: &str) -> Result<TokenData<C>, AuthError> {
         let header = decode_header(token)?;
         // TODO: (optimisation) build & store jwt_validation in key data, to avoid rebuilding it for each check
         let val_key = self.key_source.get_key(header).await?;
@@ -203,6 +380,70 @@ where
         }
 
         Ok(token_data)
+    }
+}
+
+#[async_trait]
+impl<A> Authorize for Arc<A>
+where
+    A: Authorize + Send + Sync,
+{
+    type Claims = A::Claims;
+    async fn check_auth(&self, token: &str) -> Result<TokenData<Self::Claims>, AuthError> {
+        (**self).check_auth(token).await
+    }
+}
+
+#[async_trait]
+impl<A> Authorize for &A
+where
+    A: Authorize + Send + Sync,
+{
+    type Claims = A::Claims;
+    async fn check_auth(&self, token: &str) -> Result<TokenData<Self::Claims>, AuthError> {
+        (**self).check_auth(token).await
+    }
+}
+
+#[async_trait]
+impl<A> Authorize for [A]
+where
+    A: Authorize + Send + Sync,
+{
+    type Claims = A::Claims;
+    async fn check_auth(&self, token: &str) -> Result<TokenData<Self::Claims>, AuthError> {
+        let futures: FuturesUnordered<_> = self.iter().map(|a| a.check_auth(token)).collect();
+        futures
+            .fold(Err(AuthError::InvalidClaims()), |prev, auth| async move {
+                if prev.is_ok() {
+                    prev
+                } else {
+                    auth
+                }
+            })
+            .await
+    }
+}
+
+#[async_trait]
+impl<A, const N: usize> Authorize for [A; N]
+where
+    A: Authorize + Send + Sync,
+{
+    type Claims = A::Claims;
+    async fn check_auth(&self, token: &str) -> Result<TokenData<Self::Claims>, AuthError> {
+        self.as_slice().check_auth(token).await
+    }
+}
+
+#[async_trait]
+impl<A> Authorize for Vec<A>
+where
+    A: Authorize + Send + Sync,
+{
+    type Claims = A::Claims;
+    async fn check_auth(&self, token: &str) -> Result<TokenData<Self::Claims>, AuthError> {
+        self.as_slice().check_auth(token).await
     }
 }
 
