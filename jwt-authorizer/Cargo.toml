@@ -11,7 +11,7 @@ keywords = ["jwt","axum","authorisation","jwks"]
 
 [dependencies]
 axum = { version = "0.6", features = ["headers"] }
-chrono = "0.4"
+chrono = { version = "0.4", optional = true }
 futures-util = "0.3"
 futures-core = "0.3"
 headers = "0.3"
@@ -29,6 +29,7 @@ tower-service = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tonic = { version = "0.9.2", optional = true }
+time = { version = "0.3.22", optional = true }
 
 [dev-dependencies]
 hyper = { version = "0.14", features = ["full"] }
@@ -38,7 +39,7 @@ tower = { version = "0.4", features = ["util", "buffer"] }
 wiremock = "0.5"
 
 [features]
-default = ["default-tls"]
+default = ["default-tls", "chrono"]
 default-tls = ["reqwest/default-tls"]
 native-tls = ["reqwest/native-tls"]
 native-tls-vendored = ["reqwest/native-tls-vendored"]
@@ -47,6 +48,8 @@ rustls-tls = ["reqwest/rustls-tls"]
 rustls-tls-manual-roots = ["reqwest/rustls-tls-manual-roots"]
 rustls-tls-webpki-roots = ["reqwest/rustls-tls-webpki-roots"]
 rustls-tls-native-roots = ["reqwest/rustls-tls-native-roots"]
+time = ["dep:time"]
+chrono = ["dep:chrono"]
 
 [[test]]
 name = "tonic"

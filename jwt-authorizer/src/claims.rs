@@ -1,4 +1,3 @@
-use chrono::{DateTime, TimeZone, Utc};
 use std::fmt;
 
 use serde::{de, Deserialize, Deserializer};
@@ -7,9 +6,23 @@ use serde::{de, Deserialize, Deserializer};
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct NumericDate(i64);
 
+#[cfg(feature = "chrono")]
+use chrono::{DateTime, TimeZone, Utc};
+
+#[cfg(feature = "chrono")]
 impl From<NumericDate> for DateTime<Utc> {
     fn from(t: NumericDate) -> Self {
         Utc.timestamp_opt(t.0, 0).unwrap()
+    }
+}
+
+#[cfg(feature = "time")]
+use time::OffsetDateTime;
+
+#[cfg(feature = "time")]
+impl From<NumericDate> for OffsetDateTime {
+    fn from(t: NumericDate) -> Self {
+        OffsetDateTime::from_unix_timestamp(t.0).unwrap()
     }
 }
 
