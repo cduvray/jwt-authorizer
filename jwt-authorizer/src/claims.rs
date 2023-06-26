@@ -6,6 +6,13 @@ use serde::{de, Deserialize, Deserializer};
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct NumericDate(i64);
 
+impl NumericDate {
+    /// Get the underlying unix timestamp
+    pub fn inner(&self) -> i64 {
+        self.0
+    }
+}
+
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, TimeZone, Utc};
 
