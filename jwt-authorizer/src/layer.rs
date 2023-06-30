@@ -182,11 +182,17 @@ where
         self
     }
 
+    /// Gets an `Authorizer` in order to use `check_auth` outside of a layer.
+    pub async fn authorizer(self) -> Result<Authorizer<C>, InitError> {
+        let val = self.validation.unwrap_or_default();
+        Authorizer::build(&self.key_source_type, self.claims_checker, self.refresh, val).await
+    }
+
     /// Build axum layer
     pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
-        let val = self.validation.unwrap_or_default();
-        let auth = Arc::new(Authorizer::build(&self.key_source_type, self.claims_checker, self.refresh, val).await?);
-        Ok(AsyncAuthorizationLayer::new(auth, self.jwt_source))
+        let jwt_source = self.jwt_source.clone();
+        let auth = Arc::new(self.authorizer().await?);
+        Ok(AsyncAuthorizationLayer::new(auth, jwt_source))
     }
 }
 /// Trait for authorizing requests.
