@@ -19,6 +19,15 @@ pub enum OneOrArray<T> {
     Array(Vec<T>),
 }
 
+impl<T> OneOrArray<T> {
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a T> + 'a> {
+        match self {
+            OneOrArray::One(v) => Box::new(std::iter::once(v)),
+            OneOrArray::Array(vector) => Box::new(vector.iter()),
+        }
+    }
+}
+
 /// Claims mentioned in the JWT specifications.
 ///
 /// https://www.rfc-editor.org/rfc/rfc7519#section-4.1
@@ -45,6 +54,23 @@ mod tests {
     #[derive(Deserialize)]
     struct TestStruct {
         v: OneOrArray<String>,
+    }
+
+    #[test]
+    fn one_or_array_iter() {
+        let o = OneOrArray::One("aaa".to_owned());
+        let mut i = o.iter();
+        assert_eq!(Some(&"aaa".to_owned()), i.next());
+
+        let a = OneOrArray::Array(vec!["aaa".to_owned()]);
+        let mut i = a.iter();
+        assert_eq!(Some(&"aaa".to_owned()), i.next());
+
+        let a = OneOrArray::Array(vec!["aaa".to_owned(), "bbb".to_owned()]);
+        let mut i = a.iter();
+        assert_eq!(Some(&"aaa".to_owned()), i.next());
+        assert_eq!(Some(&"bbb".to_owned()), i.next());
+        assert_eq!(None, i.next());
     }
 
     #[test]
