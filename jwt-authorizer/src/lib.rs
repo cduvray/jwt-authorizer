@@ -6,7 +6,7 @@ use jsonwebtoken::TokenData;
 use serde::de::DeserializeOwned;
 
 pub use self::error::AuthError;
-pub use claims::{NumericDate, RegisteredClaims, StringList};
+pub use claims::{NumericDate, OneOrArray, RegisteredClaims};
 pub use jwks::key_store_manager::{Refresh, RefreshStrategy};
 pub use layer::JwtAuthorizer;
 pub use validation::Validation;

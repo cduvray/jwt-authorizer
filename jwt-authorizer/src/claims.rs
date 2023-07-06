@@ -1,7 +1,6 @@
 use chrono::{DateTime, TimeZone, Utc};
-use std::fmt;
 
-use serde::{de, Deserialize, Deserializer};
+use serde::Deserialize;
 
 /// Seconds since the epoch
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -13,8 +12,12 @@ impl From<NumericDate> for DateTime<Utc> {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
-pub struct StringList(Vec<String>);
+#[derive(PartialEq, Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrArray<T> {
+    One(T),
+    Array(Vec<T>),
+}
 
 /// Claims mentioned in the JWT specifications.
 ///
@@ -23,37 +26,11 @@ pub struct StringList(Vec<String>);
 pub struct RegisteredClaims {
     pub iss: Option<String>,
     pub sub: Option<String>,
-    pub aud: Option<StringList>,
+    pub aud: Option<OneOrArray<String>>,
     pub exp: Option<NumericDate>,
     pub nbf: Option<NumericDate>,
     pub iat: Option<NumericDate>,
     pub jti: Option<String>,
-}
-
-impl<'de> Deserialize<'de> for StringList {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct StringListVisitor;
-        impl<'de> de::Visitor<'de> for StringListVisitor {
-            type Value = StringList;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(formatter, "a space seperated strings")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                let auds: Vec<String> = v.split(' ').map(|s| s.to_owned()).collect();
-                Ok(StringList(auds))
-            }
-        }
-
-        deserializer.deserialize_string(StringListVisitor)
-    }
 }
 
 #[cfg(test)]
@@ -63,17 +40,20 @@ mod tests {
     use serde::Deserialize;
     use serde_json::json;
 
-    use crate::claims::{NumericDate, RegisteredClaims, StringList};
+    use crate::claims::{NumericDate, OneOrArray, RegisteredClaims};
 
     #[derive(Deserialize)]
     struct TestStruct {
-        v: StringList,
+        v: OneOrArray<String>,
     }
 
     #[test]
     fn rfc_claims_aud() {
-        let a: TestStruct = serde_json::from_str(r#"{"v":"a b"}"#).unwrap();
-        assert_eq!(a.v, StringList(vec!["a".to_owned(), "b".to_owned()]));
+        let a: TestStruct = serde_json::from_str(r#"{"v":"a"}"#).unwrap();
+        assert_eq!(a.v, OneOrArray::One("a".to_owned()));
+
+        let a: TestStruct = serde_json::from_str(r#"{"v":["a", "b"]}"#).unwrap();
+        assert_eq!(a.v, OneOrArray::Array(vec!["a".to_owned(), "b".to_owned()]));
     }
 
     #[test]
@@ -87,7 +67,7 @@ mod tests {
     fn rfc_claims() {
         let jwt_json = json!({
                     "iss": "http://localhost:3001",
-                    "aud": "aud1 aud2",
+                    "aud": ["aud1", "aud2"],
                     "sub": "bob",
                     "exp": 1516240122,
                     "iat": 1516239022,
@@ -96,7 +76,10 @@ mod tests {
 
         let claims: RegisteredClaims = serde_json::from_value(jwt_json).expect("Failed RfcClaims deserialisation");
         assert_eq!(claims.iss.unwrap(), "http://localhost:3001");
-        assert_eq!(claims.aud.unwrap(), StringList(vec!["aud1".to_owned(), "aud2".to_owned()]));
+        assert_eq!(
+            claims.aud.unwrap(),
+            OneOrArray::Array(vec!["aud1".to_owned(), "aud2".to_owned()])
+        );
         assert_eq!(claims.exp.unwrap(), NumericDate(1516240122));
 
         let dt: DateTime<Utc> = claims.iat.unwrap().into();
