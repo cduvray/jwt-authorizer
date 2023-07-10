@@ -1,14 +1,33 @@
-use chrono::{DateTime, TimeZone, Utc};
-
 use serde::Deserialize;
 
 /// Seconds since the epoch
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct NumericDate(i64);
 
+impl NumericDate {
+    /// Get the underlying unix timestamp
+    pub fn inner(&self) -> i64 {
+        self.0
+    }
+}
+
+#[cfg(feature = "chrono")]
+use chrono::{DateTime, TimeZone, Utc};
+
+#[cfg(feature = "chrono")]
 impl From<NumericDate> for DateTime<Utc> {
     fn from(t: NumericDate) -> Self {
         Utc.timestamp_opt(t.0, 0).unwrap()
+    }
+}
+
+#[cfg(feature = "time")]
+use time::OffsetDateTime;
+
+#[cfg(feature = "time")]
+impl From<NumericDate> for OffsetDateTime {
+    fn from(t: NumericDate) -> Self {
+        OffsetDateTime::from_unix_timestamp(t.0).unwrap()
     }
 }
 
@@ -27,6 +46,9 @@ impl<T> OneOrArray<T> {
         }
     }
 }
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct StringList(Vec<String>);
 
 /// Claims mentioned in the JWT specifications.
 ///
