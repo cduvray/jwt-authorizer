@@ -1,13 +1,14 @@
 use serde::Deserialize;
 
-/// Seconds since the epoch
+/// The number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time ignoring leap seconds.
+/// (https://www.rfc-editor.org/rfc/rfc7519#section-2)
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct NumericDate(i64);
 
-impl NumericDate {
-    /// Get the underlying unix timestamp
-    pub fn inner(&self) -> i64 {
-        self.0
+/// accesses the underlying value
+impl From<NumericDate> for i64 {
+    fn from(t: NumericDate) -> Self {
+        t.0
     }
 }
 
@@ -106,9 +107,25 @@ mod tests {
 
     #[test]
     fn from_numeric_date() {
+        let exp: i64 = NumericDate(1516239022).into();
+        assert_eq!(exp, 1516239022);
+    }
+
+    #[test]
+    fn chrono_from_numeric_date() {
         let exp: DateTime<Utc> = NumericDate(1516239022).into();
         assert_eq!(exp, Utc.timestamp_opt(1516239022, 0).unwrap());
         assert_eq!(exp, DateTime::parse_from_rfc3339("2018-01-18T01:30:22.000Z").unwrap());
+    }
+
+    #[cfg(feature = "time")]
+    #[test]
+    fn time_from_numeric_date() {
+        use time::macros::datetime;
+        use time::OffsetDateTime;
+
+        let exp: OffsetDateTime = NumericDate(1516239022).into();
+        assert_eq!(exp, datetime!(2018-01-18 01:30:22 UTC));
     }
 
     #[test]
