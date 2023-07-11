@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Added
+## 0.10.1
+
+### Fixed
+
+- (RegisteredClaims) audience claim, should be a string o an array of strings
+- (NumericDate) optional feature enables `time` dep as an alternative to `chrono`
 
 ## 0.10.0 (2023-05-19)
 
