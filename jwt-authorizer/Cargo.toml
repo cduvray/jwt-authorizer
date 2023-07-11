@@ -1,7 +1,7 @@
 [package]
 name = "jwt-authorizer"
 description = "jwt authorizer middleware for axum and tonic"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2021"
 authors = ["cduvray <c_duvray@proton.me>"]
 license = "MIT"
