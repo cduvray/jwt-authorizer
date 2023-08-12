@@ -55,6 +55,10 @@ pub enum AuthError {
 
     #[error("Invalid Claim")]
     InvalidClaims(),
+
+    /// Used when a claim extractor is used and no authorization layer is in front the handler
+    #[error("No Authorizer Layer")]
+    NoAuthorizerLayer(),
 }
 
 fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
@@ -113,6 +117,10 @@ impl From<AuthError> for Response<tonic::body::BoxBody> {
                 debug!("AuthErrors::InvalidClaims");
                 tonic::Status::unauthenticated("error=\"insufficient_scope\"")
             }
+            AuthError::NoAuthorizerLayer() => {
+                debug!("AuthErrors::NoAuthorizerLayer");
+                tonic::Status::unauthenticated("error=\"no_authorizer_layer\"")
+            }
         }
         .to_http()
     }
@@ -165,6 +173,11 @@ impl IntoResponse for AuthError {
             AuthError::InvalidClaims() => {
                 debug!("AuthErrors::InvalidClaims");
                 response_wwwauth(StatusCode::FORBIDDEN, "error=\"insufficient_scope\"")
+            }
+            AuthError::NoAuthorizerLayer() => {
+                debug!("AuthErrors::NoAuthorizerLayer");
+                // TODO: should it be a standard error?
+                response_wwwauth(StatusCode::UNAUTHORIZED, "error=\"no_authorizer_layer\"")
             }
         }
     }
