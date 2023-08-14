@@ -55,6 +55,9 @@ pub enum AuthError {
 
     #[error("Invalid Claim")]
     InvalidClaims(),
+
+    #[error("No Authorizer")]
+    NoAuthorizer(),
 }
 
 fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
@@ -165,6 +168,10 @@ impl IntoResponse for AuthError {
             AuthError::InvalidClaims() => {
                 debug!("AuthErrors::InvalidClaims");
                 response_wwwauth(StatusCode::FORBIDDEN, "error=\"insufficient_scope\"")
+            }
+            AuthError::NoAuthorizer() => {
+                debug!("AuthErrors::NoAuthorizer");
+                response_wwwauth(StatusCode::FORBIDDEN, "error=\"invalid_token\"")
             }
         }
     }

@@ -3,6 +3,7 @@ use futures_core::ready;
 use futures_util::future::BoxFuture;
 use headers::authorization::Bearer;
 use headers::{Authorization, HeaderMapExt};
+use jsonwebtoken::TokenData;
 use pin_project::pin_project;
 use serde::de::DeserializeOwned;
 use std::future::Future;
@@ -209,10 +210,9 @@ where
     type Future = BoxFuture<'static, Result<Request<B>, AuthError>>;
 
     fn authorize(&self, mut request: Request<B>) -> Self::Future {
-        let authorizer = self.auth.clone();
+        // TODO: extract token per authorizer (jwt_source shloud be per authorizer)
         let h = request.headers();
-
-        let token = match &self.jwt_source {
+        let token_o = match &self.jwt_source {
             layer::JwtSource::AuthorizationHeader => {
                 let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
                 bearer_o.map(|b| String::from(b.0.token()))
@@ -221,17 +221,30 @@ where
                 .typed_get::<headers::Cookie>()
                 .and_then(|c| c.get(name.as_str()).map(String::from)),
         };
-        Box::pin(async move {
-            if let Some(token) = token {
-                authorizer.check_auth(token.as_str()).await.map(|token_data| {
-                    // Set `token_data` as a request extension so it can be accessed by other
-                    // services down the stack.
-                    request.extensions_mut().insert(token_data);
 
-                    request
-                })
+        let authorizers: Vec<Arc<Authorizer<C>>> = self.auths.iter().map(|a| a.clone()).collect();
+
+        Box::pin(async move {
+            if let Some(token) = token_o {
+                let mut token_data: Result<TokenData<C>, AuthError> = Err(AuthError::NoAuthorizer());
+                for auth in authorizers {
+                    token_data = auth.check_auth(token.as_str()).await;
+                    if token_data.is_ok() {
+                        break;
+                    }
+                }
+                match token_data {
+                    Ok(tdata) => {
+                        // Set `token_data` as a request extension so it can be accessed by other
+                        // services down the stack.
+                        request.extensions_mut().insert(tdata);
+
+                        return Ok(request);
+                    }
+                    Err(err) => return Err(err), // TODO: error containing all errors (not just the last one)
+                }
             } else {
-                Err(AuthError::MissingToken())
+                return Err(AuthError::MissingToken());
             }
         })
     }
@@ -291,7 +304,7 @@ where
     C: Clone + DeserializeOwned + Send + Sync,
 {
     pub inner: S,
-    pub auth: Arc<Authorizer<C>>,
+    pub auths: Vec<Arc<Authorizer<C>>>,
     pub jwt_source: JwtSource,
 }
 
@@ -322,7 +335,11 @@ where
     ///
     /// The `Authorization` header is required to have the value provided.
     pub fn new(inner: S, auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
-        Self { inner, auth, jwt_source }
+        Self {
+            inner,
+            auths: vec![auth],
+            jwt_source,
+        }
     }
 }
 
