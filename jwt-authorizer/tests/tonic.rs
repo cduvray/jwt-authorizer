@@ -3,7 +3,7 @@ use std::{sync::Once, task::Poll};
 use axum::body::HttpBody;
 use futures_core::future::BoxFuture;
 use http::header::AUTHORIZATION;
-use jwt_authorizer::{layer::AsyncAuthorizationService, IntoLayer, JwtAuthorizer};
+use jwt_authorizer::{layer::AsyncAuthorizationService, JwtAuthorizer, TryIntoLayer};
 use serde::{Deserialize, Serialize};
 use tonic::{server::UnaryService, transport::NamedService, IntoRequest, Status};
 use tower::{buffer::Buffer, Service};
@@ -83,7 +83,7 @@ async fn app(
     jwt_auth: JwtAuthorizer<User>,
     expected_sub: String,
 ) -> AsyncAuthorizationService<Buffer<tonic::transport::server::Routes, http::Request<tonic::transport::Body>>, User> {
-    let layer = jwt_auth.into_layer().await.unwrap();
+    let layer = jwt_auth.try_into_layer().await.unwrap();
     tonic::transport::Server::builder()
         .layer(layer)
         .layer(tower::buffer::BufferLayer::new(1))

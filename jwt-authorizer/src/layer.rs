@@ -192,14 +192,20 @@ where
         );
         Ok(AsyncAuthorizationLayer::new(vec![auth]))
     }
+
+    pub async fn build(self) -> Result<Authorizer<C>, InitError> {
+        let val = self.validation.unwrap_or_default();
+
+        Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await
+    }
 }
 
 #[async_trait]
-impl<C> IntoLayer<C> for JwtAuthorizer<C>
+impl<C> TryIntoLayer<C> for JwtAuthorizer<C>
 where
     C: Clone + DeserializeOwned + Send + Sync,
 {
-    async fn into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+    async fn try_into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
         let auth = Arc::new(
             Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await?,
@@ -209,12 +215,12 @@ where
 }
 
 #[async_trait]
-impl<C, T> IntoLayer<C> for T
+impl<C, T> TryIntoLayer<C> for T
 where
     T: IntoIterator<Item = JwtAuthorizer<C>> + Send + Sync,
     C: Clone + DeserializeOwned + Send + Sync,
 {
-    async fn into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+    async fn try_into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let mut errs = Vec::<InitError>::new();
         let mut auths = Vec::<Arc<Authorizer<C>>>::new();
         let mut auths_futs: FuturesUnordered<_> = self
@@ -331,11 +337,11 @@ where
 }
 
 #[async_trait]
-pub trait IntoLayer<C>
+pub trait TryIntoLayer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    async fn into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError>;
+    async fn try_into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError>;
 }
 
 // ----------  AsyncAuthorizationService  --------
@@ -486,12 +492,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{IntoLayer, JwtAuthorizer};
+    use crate::{JwtAuthorizer, TryIntoLayer};
 
     #[tokio::test]
     async fn jwt_auth_to_layer() {
         let auth1: JwtAuthorizer = JwtAuthorizer::from_secret("aaa");
-        let layer = auth1.into_layer().await;
+        let layer = auth1.try_into_layer().await;
         assert!(layer.is_ok());
     }
 
@@ -500,7 +506,7 @@ mod tests {
         let auth1: JwtAuthorizer = JwtAuthorizer::from_secret("aaa");
         let auth2: JwtAuthorizer = JwtAuthorizer::from_secret("bbb");
         let av = vec![auth1, auth2];
-        let layer = av.into_layer().await;
+        let layer = av.try_into_layer().await;
         assert!(layer.is_ok());
     }
 
@@ -509,7 +515,7 @@ mod tests {
         let auth1: JwtAuthorizer = JwtAuthorizer::from_ec_pem("aaa");
         let auth2: JwtAuthorizer = JwtAuthorizer::from_ed_pem("bbb");
         let av = vec![auth1, auth2];
-        let layer = av.into_layer().await;
+        let layer = av.try_into_layer().await;
         assert!(layer.is_err());
         if let Err(err) = layer {
             assert_eq!(err.to_string(), "No such file or directory (os error 2)");

@@ -12,7 +12,7 @@ mod tests {
         BoxError, Router,
     };
     use http::{header, HeaderValue};
-    use jwt_authorizer::{layer::JwtSource, validation::Validation, IntoLayer, JwtAuthorizer, JwtClaims};
+    use jwt_authorizer::{layer::JwtSource, validation::Validation, JwtAuthorizer, JwtClaims, TryIntoLayer};
     use serde::Deserialize;
     use tower::{util::MapErrLayer, ServiceExt};
 
@@ -23,7 +23,7 @@ mod tests {
         sub: String,
     }
 
-    async fn app(jwt_auth: impl IntoLayer<User>) -> Router {
+    async fn app(jwt_auth: impl TryIntoLayer<User>) -> Router {
         Router::new().route("/public", get(|| async { "hello" })).route(
             "/protected",
             get(|JwtClaims(user): JwtClaims<User>| async move { format!("hello: {}", user.sub) }).layer(
@@ -32,14 +32,14 @@ mod tests {
                         tower::buffer::BufferLayer::new(1),
                         MapErrLayer::new(|e: BoxError| -> Infallible { panic!("{}", e) }),
                     ),
-                    jwt_auth.into_layer().await.unwrap(),
+                    jwt_auth.try_into_layer().await.unwrap(),
                 ),
             ),
         )
     }
 
     async fn proteced_request_with_header(
-        jwt_auth: impl IntoLayer<User>,
+        jwt_auth: impl TryIntoLayer<User>,
         header_name: &str,
         header_value: &str,
     ) -> Response {
@@ -56,7 +56,7 @@ mod tests {
             .unwrap()
     }
 
-    async fn make_proteced_request(jwt_auth: impl IntoLayer<User>, bearer: &str) -> Response {
+    async fn make_proteced_request(jwt_auth: impl TryIntoLayer<User>, bearer: &str) -> Response {
         proteced_request_with_header(jwt_auth, "Authorization", &format!("Bearer {bearer}")).await
     }
 

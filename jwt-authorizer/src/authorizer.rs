@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use crate::{
     error::{AuthError, InitError},
     jwks::{key_store_manager::KeyStoreManager, KeyData, KeySource},
-    layer::{self, JwtSource},
+    layer::{self, AsyncAuthorizationLayer, JwtSource},
     oidc, Refresh,
 };
 
@@ -230,6 +230,24 @@ where
                 .typed_get::<headers::Cookie>()
                 .and_then(|c| c.get(name.as_str()).map(String::from)),
         }
+    }
+}
+
+impl<C> Into<AsyncAuthorizationLayer<C>> for Vec<Authorizer<C>>
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into(self) -> AsyncAuthorizationLayer<C> {
+        AsyncAuthorizationLayer::new(self.into_iter().map(|a| Arc::new(a)).collect())
+    }
+}
+
+impl<C> Into<AsyncAuthorizationLayer<C>> for Authorizer<C>
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into(self) -> AsyncAuthorizationLayer<C> {
+        AsyncAuthorizationLayer::new(vec![Arc::new(self)])
     }
 }
 

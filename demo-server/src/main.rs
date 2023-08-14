@@ -1,5 +1,5 @@
 use axum::{routing::get, Router};
-use jwt_authorizer::{error::InitError, AuthError, IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
+use jwt_authorizer::{error::InitError, AuthError, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy, TryIntoLayer};
 use serde::Deserialize;
 use std::net::SocketAddr;
 use tower_http::trace::TraceLayer;
@@ -49,7 +49,7 @@ async fn main() -> Result<(), InitError> {
     let api = Router::new()
         .route("/protected", get(protected))
         // adding the authorizer layer
-        .layer(jwt_auth.into_layer().await?);
+        .layer(jwt_auth.try_into_layer().await?);
 
     let app = Router::new()
         // public endpoint
