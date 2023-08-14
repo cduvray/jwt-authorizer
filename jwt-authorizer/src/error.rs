@@ -116,6 +116,10 @@ impl From<AuthError> for Response<tonic::body::BoxBody> {
                 debug!("AuthErrors::InvalidClaims");
                 tonic::Status::unauthenticated("error=\"insufficient_scope\"")
             }
+            AuthError::NoAuthorizer() => {
+                debug!("AuthErrors::NoAuthorizer");
+                tonic::Status::unauthenticated("error=\"invalid_token\"")
+            }
         }
         .to_http()
     }
