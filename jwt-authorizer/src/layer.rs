@@ -275,7 +275,7 @@ where
                 .and_then(|c| c.get(name.as_str()).map(String::from)),
         };
 
-        let authorizers: Vec<Arc<Authorizer<C>>> = self.auths.iter().map(|a| a.clone()).collect();
+        let authorizers: Vec<Arc<Authorizer<C>>> = self.auths.iter().cloned().collect();
 
         Box::pin(async move {
             if let Some(token) = token_o {
@@ -292,12 +292,12 @@ where
                         // services down the stack.
                         request.extensions_mut().insert(tdata);
 
-                        return Ok(request);
+                        Ok(request)
                     }
-                    Err(err) => return Err(err), // TODO: error containing all errors (not just the last one)
+                    Err(err) => Err(err), // TODO: error containing all errors (not just the last one)
                 }
             } else {
-                return Err(AuthError::MissingToken());
+                Err(AuthError::MissingToken())
             }
         })
     }
@@ -398,7 +398,7 @@ where
     pub fn new(inner: S, auths: Vec<Arc<Authorizer<C>>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
         Self {
             inner,
-            auths: auths,
+            auths,
             jwt_source,
         }
     }
