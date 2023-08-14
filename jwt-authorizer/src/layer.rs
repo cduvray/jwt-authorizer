@@ -1,10 +1,8 @@
 use axum::async_trait;
 use axum::http::Request;
 use futures_core::ready;
-use futures_util::future::BoxFuture;
+use futures_util::future::{self, BoxFuture};
 use futures_util::stream::{FuturesUnordered, StreamExt};
-use headers::authorization::Bearer;
-use headers::{Authorization, HeaderMapExt};
 use jsonwebtoken::TokenData;
 use pin_project::pin_project;
 use serde::de::DeserializeOwned;
@@ -20,7 +18,7 @@ use crate::claims::RegisteredClaims;
 use crate::error::InitError;
 use crate::jwks::key_store_manager::Refresh;
 use crate::validation::Validation;
-use crate::{layer, AuthError, RefreshStrategy};
+use crate::{AuthError, RefreshStrategy};
 
 /// Authorizer Layer builder
 ///
@@ -189,8 +187,10 @@ where
     #[deprecated(since = "0.10.0", note = "please use `to_layer()` instead")]
     pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
-        let auth = Arc::new(Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val).await?);
-        Ok(AsyncAuthorizationLayer::new(vec![auth], self.jwt_source))
+        let auth = Arc::new(
+            Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await?,
+        );
+        Ok(AsyncAuthorizationLayer::new(vec![auth]))
     }
 }
 
@@ -201,8 +201,10 @@ where
 {
     async fn to_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
-        let auth = Arc::new(Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val).await?);
-        Ok(AsyncAuthorizationLayer::new(vec![auth], self.jwt_source))
+        let auth = Arc::new(
+            Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await?,
+        );
+        Ok(AsyncAuthorizationLayer::new(vec![auth]))
     }
 }
 
@@ -222,6 +224,7 @@ where
                     a.claims_checker,
                     a.refresh,
                     a.validation.unwrap_or_default(),
+                    a.jwt_source,
                 )
             })
             .collect();
@@ -237,8 +240,7 @@ where
             // TODO: composite build error (containing all errors)
             Err(e)
         } else {
-            // TODO: jwt_source per Authorizer
-            Ok(AsyncAuthorizationLayer::new(auths, JwtSource::AuthorizationHeader))
+            Ok(AsyncAuthorizationLayer::new(auths))
         }
     }
 }
@@ -263,41 +265,35 @@ where
     type Future = BoxFuture<'static, Result<Request<B>, AuthError>>;
 
     fn authorize(&self, mut request: Request<B>) -> Self::Future {
-        // TODO: extract token per authorizer (jwt_source shloud be per authorizer)
-        let h = request.headers();
-        let token_o = match &self.jwt_source {
-            layer::JwtSource::AuthorizationHeader => {
-                let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
-                bearer_o.map(|b| String::from(b.0.token()))
-            }
-            layer::JwtSource::Cookie(name) => h
-                .typed_get::<headers::Cookie>()
-                .and_then(|c| c.get(name.as_str()).map(String::from)),
-        };
+        let tkns_auths: Vec<(Option<String>, Arc<Authorizer<C>>)> = self
+            .auths
+            .iter()
+            .map(|a| (a.extract_token(request.headers()), a.clone()))
+            .collect();
 
-        let authorizers: Vec<Arc<Authorizer<C>>> = self.auths.iter().cloned().collect();
+        if !tkns_auths.iter().any(|(t, _)| t.is_some()) {
+            return Box::pin(future::ready(Err(AuthError::MissingToken())));
+        }
 
         Box::pin(async move {
-            if let Some(token) = token_o {
-                let mut token_data: Result<TokenData<C>, AuthError> = Err(AuthError::NoAuthorizer());
-                for auth in authorizers {
+            let mut token_data: Result<TokenData<C>, AuthError> = Err(AuthError::NoAuthorizer());
+            for (tkn, auth) in tkns_auths {
+                if let Some(token) = tkn {
                     token_data = auth.check_auth(token.as_str()).await;
                     if token_data.is_ok() {
                         break;
                     }
                 }
-                match token_data {
-                    Ok(tdata) => {
-                        // Set `token_data` as a request extension so it can be accessed by other
-                        // services down the stack.
-                        request.extensions_mut().insert(tdata);
+            }
+            match token_data {
+                Ok(tdata) => {
+                    // Set `token_data` as a request extension so it can be accessed by other
+                    // services down the stack.
+                    request.extensions_mut().insert(tdata);
 
-                        Ok(request)
-                    }
-                    Err(err) => Err(err), // TODO: error containing all errors (not just the last one)
+                    Ok(request)
                 }
-            } else {
-                Err(AuthError::MissingToken())
+                Err(err) => Err(err), // TODO: error containing all errors (not just the last one)
             }
         })
     }
@@ -311,15 +307,14 @@ where
     C: Clone + DeserializeOwned + Send,
 {
     auths: Vec<Arc<Authorizer<C>>>,
-    jwt_source: JwtSource,
 }
 
 impl<C> AsyncAuthorizationLayer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    pub fn new(auths: Vec<Arc<Authorizer<C>>>, jwt_source: JwtSource) -> AsyncAuthorizationLayer<C> {
-        Self { auths, jwt_source }
+    pub fn new(auths: Vec<Arc<Authorizer<C>>>) -> AsyncAuthorizationLayer<C> {
+        Self { auths }
     }
 }
 
@@ -330,7 +325,7 @@ where
     type Service = AsyncAuthorizationService<S, C>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        AsyncAuthorizationService::new(inner, self.auths.clone(), self.jwt_source.clone())
+        AsyncAuthorizationService::new(inner, self.auths.clone())
     }
 }
 
@@ -366,7 +361,6 @@ where
 {
     pub inner: S,
     pub auths: Vec<Arc<Authorizer<C>>>,
-    pub jwt_source: JwtSource,
 }
 
 impl<S, C> AsyncAuthorizationService<S, C>
@@ -395,12 +389,8 @@ where
     /// Authorize requests using a custom scheme.
     ///
     /// The `Authorization` header is required to have the value provided.
-    pub fn new(inner: S, auths: Vec<Arc<Authorizer<C>>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
-        Self {
-            inner,
-            auths,
-            jwt_source,
-        }
+    pub fn new(inner: S, auths: Vec<Arc<Authorizer<C>>>) -> AsyncAuthorizationService<S, C> {
+        Self { inner, auths }
     }
 }
 

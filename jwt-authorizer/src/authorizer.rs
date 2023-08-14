@@ -1,5 +1,7 @@
 use std::{io::Read, sync::Arc};
 
+use headers::{authorization::Bearer, Authorization, HeaderMapExt};
+use http::HeaderMap;
 use jsonwebtoken::{decode, decode_header, jwk::JwkSet, Algorithm, DecodingKey, TokenData};
 use reqwest::Url;
 use serde::de::DeserializeOwned;
@@ -7,6 +9,7 @@ use serde::de::DeserializeOwned;
 use crate::{
     error::{AuthError, InitError},
     jwks::{key_store_manager::KeyStoreManager, KeyData, KeySource},
+    layer::{self, JwtSource},
     oidc, Refresh,
 };
 
@@ -38,6 +41,7 @@ where
     pub key_source: KeySource,
     pub claims_checker: Option<FnClaimsChecker<C>>,
     pub validation: crate::validation::Validation,
+    pub jwt_source: JwtSource,
 }
 
 fn read_data(path: &str) -> Result<Vec<u8>, InitError> {
@@ -69,6 +73,7 @@ where
         claims_checker: Option<FnClaimsChecker<C>>,
         refresh: Option<Refresh>,
         validation: crate::validation::Validation,
+        jwt_source: JwtSource,
     ) -> Result<Authorizer<C>, InitError> {
         Ok(match key_source_type {
             KeySourceType::RSA(path) => {
@@ -81,6 +86,7 @@ where
                     })),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::RSAString(text) => {
@@ -93,6 +99,7 @@ where
                     })),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::EC(path) => {
@@ -105,6 +112,7 @@ where
                     })),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::ECString(text) => {
@@ -117,6 +125,7 @@ where
                     })),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::ED(path) => {
@@ -129,6 +138,7 @@ where
                     })),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::EDString(text) => {
@@ -141,6 +151,7 @@ where
                     })),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::Secret(secret) => {
@@ -153,6 +164,7 @@ where
                     })),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::JwksString(jwks_str) => {
@@ -164,6 +176,7 @@ where
                     key_source: KeySource::SingleKeySource(Arc::new(k)),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::Jwks(url) => {
@@ -173,6 +186,7 @@ where
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
             KeySourceType::Discovery(issuer_url) => {
@@ -184,6 +198,7 @@ where
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
                     validation,
+                    jwt_source,
                 }
             }
         })
@@ -204,6 +219,18 @@ where
 
         Ok(token_data)
     }
+
+    pub fn extract_token(&self, h: &HeaderMap) -> Option<String> {
+        match &self.jwt_source {
+            layer::JwtSource::AuthorizationHeader => {
+                let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
+                bearer_o.map(|b| String::from(b.0.token()))
+            }
+            layer::JwtSource::Cookie(name) => h
+                .typed_get::<headers::Cookie>()
+                .and_then(|c| c.get(name.as_str()).map(String::from)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -212,16 +239,22 @@ mod tests {
     use jsonwebtoken::{Algorithm, Header};
     use serde_json::Value;
 
-    use crate::validation::Validation;
+    use crate::{layer::JwtSource, validation::Validation};
 
     use super::{Authorizer, KeySourceType};
 
     #[tokio::test]
     async fn build_from_secret() {
         let h = Header::new(Algorithm::HS256);
-        let a = Authorizer::<Value>::build(KeySourceType::Secret("xxxxxx".to_owned()), None, None, Validation::new())
-            .await
-            .unwrap();
+        let a = Authorizer::<Value>::build(
+            KeySourceType::Secret("xxxxxx".to_owned()),
+            None,
+            None,
+            Validation::new(),
+            JwtSource::AuthorizationHeader,
+        )
+        .await
+        .unwrap();
         let k = a.key_source.get_key(h);
         assert!(k.await.is_ok());
     }
@@ -238,9 +271,15 @@ mod tests {
                     "e": "AQAB"
                 }]}
         "#;
-        let a = Authorizer::<Value>::build(KeySourceType::JwksString(jwks.to_owned()), None, None, Validation::new())
-            .await
-            .unwrap();
+        let a = Authorizer::<Value>::build(
+            KeySourceType::JwksString(jwks.to_owned()),
+            None,
+            None,
+            Validation::new(),
+            JwtSource::AuthorizationHeader,
+        )
+        .await
+        .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::RS256));
         assert!(k.await.is_ok());
     }
@@ -252,6 +291,7 @@ mod tests {
             None,
             None,
             Validation::new(),
+            JwtSource::AuthorizationHeader,
         )
         .await
         .unwrap();
@@ -263,6 +303,7 @@ mod tests {
             None,
             None,
             Validation::new(),
+            JwtSource::AuthorizationHeader,
         )
         .await
         .unwrap();
@@ -274,6 +315,7 @@ mod tests {
             None,
             None,
             Validation::new(),
+            JwtSource::AuthorizationHeader,
         )
         .await
         .unwrap();
@@ -288,6 +330,7 @@ mod tests {
             None,
             None,
             Validation::new(),
+            JwtSource::AuthorizationHeader,
         )
         .await
         .unwrap();
@@ -299,6 +342,7 @@ mod tests {
             None,
             None,
             Validation::new(),
+            JwtSource::AuthorizationHeader,
         )
         .await
         .unwrap();
@@ -310,6 +354,7 @@ mod tests {
             None,
             None,
             Validation::new(),
+            JwtSource::AuthorizationHeader,
         )
         .await
         .unwrap();
@@ -324,6 +369,7 @@ mod tests {
             None,
             None,
             Validation::new(),
+            JwtSource::AuthorizationHeader,
         )
         .await;
         println!("{:?}", a.as_ref().err());
@@ -332,8 +378,14 @@ mod tests {
 
     #[tokio::test]
     async fn build_jwks_url_error() {
-        let a =
-            Authorizer::<Value>::build(KeySourceType::Jwks("://xxxx".to_owned()), None, None, Validation::default()).await;
+        let a = Authorizer::<Value>::build(
+            KeySourceType::Jwks("://xxxx".to_owned()),
+            None,
+            None,
+            Validation::default(),
+            JwtSource::AuthorizationHeader,
+        )
+        .await;
         println!("{:?}", a.as_ref().err());
         assert!(a.is_err());
     }
@@ -345,6 +397,7 @@ mod tests {
             None,
             None,
             Validation::default(),
+            JwtSource::AuthorizationHeader,
         )
         .await;
         println!("{:?}", a.as_ref().err());
