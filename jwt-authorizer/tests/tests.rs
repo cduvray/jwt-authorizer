@@ -23,7 +23,7 @@ mod tests {
         sub: String,
     }
 
-    async fn app(jwt_auth: JwtAuthorizer<User>) -> Router {
+    async fn app(jwt_auth: impl ToAuthorizationLayer<User>) -> Router {
         Router::new().route("/public", get(|| async { "hello" })).route(
             "/protected",
             get(|JwtClaims(user): JwtClaims<User>| async move { format!("hello: {}", user.sub) }).layer(
@@ -38,7 +38,11 @@ mod tests {
         )
     }
 
-    async fn proteced_request_with_header(jwt_auth: JwtAuthorizer<User>, header_name: &str, header_value: &str) -> Response {
+    async fn proteced_request_with_header(
+        jwt_auth: impl ToAuthorizationLayer<User>,
+        header_name: &str,
+        header_value: &str,
+    ) -> Response {
         app(jwt_auth)
             .await
             .oneshot(
@@ -52,7 +56,7 @@ mod tests {
             .unwrap()
     }
 
-    async fn make_proteced_request(jwt_auth: JwtAuthorizer<User>, bearer: &str) -> Response {
+    async fn make_proteced_request(jwt_auth: impl ToAuthorizationLayer<User>, bearer: &str) -> Response {
         proteced_request_with_header(jwt_auth, "Authorization", &format!("Bearer {bearer}")).await
     }
 
@@ -331,5 +335,33 @@ mod tests {
             response.headers().get(header::WWW_AUTHENTICATE).unwrap(),
             &"Bearer error=\"invalid_token\""
         );
+    }
+
+    // --------------------------
+    //      Multiple Authorizers
+    // --------------------------
+    #[tokio::test]
+    async fn multiple_authorizers() {
+        let auths: Vec<JwtAuthorizer<User>> = vec![
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem"),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").jwt_source(JwtSource::Cookie("ccc".to_owned())),
+        ];
+
+        // OK
+        let response =
+            proteced_request_with_header(auths, header::COOKIE.as_str(), &format!("ccc={}", common::JWT_RSA1_OK)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let auths: Vec<JwtAuthorizer<User>> = vec![
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem"),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").jwt_source(JwtSource::Cookie("ccc".to_owned())),
+        ];
+
+        // Cookie missing
+        let response =
+            proteced_request_with_header(auths, header::COOKIE.as_str(), &format!("bad_cookie={}", common::JWT_EC2_OK))
+                .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.headers().get(header::WWW_AUTHENTICATE).unwrap(), &"Bearer");
     }
 }
