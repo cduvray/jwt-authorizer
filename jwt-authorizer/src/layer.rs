@@ -1,6 +1,8 @@
+use axum::async_trait;
 use axum::http::Request;
 use futures_core::ready;
 use futures_util::future::BoxFuture;
+use futures_util::stream::{FuturesUnordered, StreamExt};
 use headers::authorization::Bearer;
 use headers::{Authorization, HeaderMapExt};
 use jsonwebtoken::TokenData;
@@ -184,12 +186,63 @@ where
     }
 
     /// Build axum layer
+    #[deprecated(since = "0.10.0", note = "please use `to_layer()` instead")]
     pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
-        let auth = Arc::new(Authorizer::build(&self.key_source_type, self.claims_checker, self.refresh, val).await?);
-        Ok(AsyncAuthorizationLayer::new(auth, self.jwt_source))
+        let auth = Arc::new(Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val).await?);
+        Ok(AsyncAuthorizationLayer::new(vec![auth], self.jwt_source))
     }
 }
+
+#[async_trait]
+impl<C> ToAuthorizationLayer<C> for JwtAuthorizer<C>
+where
+    C: Clone + DeserializeOwned + Send + Sync,
+{
+    async fn to_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+        let val = self.validation.unwrap_or_default();
+        let auth = Arc::new(Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val).await?);
+        Ok(AsyncAuthorizationLayer::new(vec![auth], self.jwt_source))
+    }
+}
+
+#[async_trait]
+impl<C> ToAuthorizationLayer<C> for Vec<JwtAuthorizer<C>>
+where
+    C: Clone + DeserializeOwned + Send + Sync,
+{
+    async fn to_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+        let mut errs = Vec::<InitError>::new();
+        let mut auths = Vec::<Arc<Authorizer<C>>>::new();
+        let mut auths_futs: FuturesUnordered<_> = self
+            .into_iter()
+            .map(|a| {
+                Authorizer::build(
+                    a.key_source_type,
+                    a.claims_checker,
+                    a.refresh,
+                    a.validation.unwrap_or_default(),
+                )
+            })
+            .collect();
+
+        while let Some(a) = auths_futs.next().await {
+            match a {
+                Ok(res) => auths.push(Arc::new(res)),
+                Err(err) => errs.push(err),
+            }
+        }
+
+        if let Some(e) = errs.into_iter().next() {
+            // TODO: composite build error (containing all errors)
+            Err(e)
+        } else {
+            // TODO: jwt_source per Authorizer
+            Ok(AsyncAuthorizationLayer::new(auths, JwtSource::AuthorizationHeader))
+        }
+    }
+}
+
 /// Trait for authorizing requests.
 pub trait AsyncAuthorizer<B> {
     type RequestBody;
@@ -257,7 +310,7 @@ pub struct AsyncAuthorizationLayer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    auth: Arc<Authorizer<C>>,
+    auths: Vec<Arc<Authorizer<C>>>,
     jwt_source: JwtSource,
 }
 
@@ -265,8 +318,8 @@ impl<C> AsyncAuthorizationLayer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    pub fn new(auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationLayer<C> {
-        Self { auth, jwt_source }
+    pub fn new(auths: Vec<Arc<Authorizer<C>>>, jwt_source: JwtSource) -> AsyncAuthorizationLayer<C> {
+        Self { auths, jwt_source }
     }
 }
 
@@ -277,8 +330,16 @@ where
     type Service = AsyncAuthorizationService<S, C>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        AsyncAuthorizationService::new(inner, self.auth.clone(), self.jwt_source.clone())
+        AsyncAuthorizationService::new(inner, self.auths.clone(), self.jwt_source.clone())
     }
+}
+
+#[async_trait]
+pub trait ToAuthorizationLayer<C>
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    async fn to_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError>;
 }
 
 // ----------  AsyncAuthorizationService  --------
@@ -334,10 +395,10 @@ where
     /// Authorize requests using a custom scheme.
     ///
     /// The `Authorization` header is required to have the value provided.
-    pub fn new(inner: S, auth: Arc<Authorizer<C>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
+    pub fn new(inner: S, auths: Vec<Arc<Authorizer<C>>>, jwt_source: JwtSource) -> AsyncAuthorizationService<S, C> {
         Self {
             inner,
-            auths: vec![auth],
+            auths: auths,
             jwt_source,
         }
     }
@@ -428,6 +489,39 @@ where
                     return svc_fut.poll(cx);
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{JwtAuthorizer, ToAuthorizationLayer};
+
+    #[tokio::test]
+    async fn jwt_auth_to_layer() {
+        let auth1: JwtAuthorizer = JwtAuthorizer::from_secret("aaa");
+        let layer = auth1.to_layer().await;
+        assert!(layer.is_ok());
+    }
+
+    #[tokio::test]
+    async fn vec_to_layer() {
+        let auth1: JwtAuthorizer = JwtAuthorizer::from_secret("aaa");
+        let auth2: JwtAuthorizer = JwtAuthorizer::from_secret("bbb");
+        let av = vec![auth1, auth2];
+        let layer = av.to_layer().await;
+        assert!(layer.is_ok());
+    }
+
+    #[tokio::test]
+    async fn vec_to_layer_errors() {
+        let auth1: JwtAuthorizer = JwtAuthorizer::from_ec_pem("aaa");
+        let auth2: JwtAuthorizer = JwtAuthorizer::from_ed_pem("bbb");
+        let av = vec![auth1, auth2];
+        let layer = av.to_layer().await;
+        assert!(layer.is_err());
+        if let Err(err) = layer {
+            assert_eq!(err.to_string(), "No such file or directory (os error 2)");
         }
     }
 }

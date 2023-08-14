@@ -12,7 +12,7 @@ mod tests {
         BoxError, Router,
     };
     use http::{header, HeaderValue};
-    use jwt_authorizer::{layer::JwtSource, validation::Validation, JwtAuthorizer, JwtClaims};
+    use jwt_authorizer::{layer::JwtSource, validation::Validation, JwtAuthorizer, JwtClaims, ToAuthorizationLayer};
     use serde::Deserialize;
     use tower::{util::MapErrLayer, ServiceExt};
 
@@ -32,7 +32,7 @@ mod tests {
                         tower::buffer::BufferLayer::new(1),
                         MapErrLayer::new(|e: BoxError| -> Infallible { panic!("{}", e) }),
                     ),
-                    jwt_auth.layer().await.unwrap(),
+                    jwt_auth.to_layer().await.unwrap(),
                 ),
             ),
         )
