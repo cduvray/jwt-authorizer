@@ -352,7 +352,7 @@ mod tests {
             proteced_request_with_header(auths, header::COOKIE.as_str(), &format!("ccc={}", common::JWT_RSA1_OK)).await;
         assert_eq!(response.status(), StatusCode::OK);
 
-        let auths: Vec<JwtAuthorizer<User>> = vec![
+        let auths: [JwtAuthorizer<User>; 2] = [
             JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem"),
             JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").jwt_source(JwtSource::Cookie("ccc".to_owned())),
         ];

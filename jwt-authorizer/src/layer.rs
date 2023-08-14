@@ -209,8 +209,9 @@ where
 }
 
 #[async_trait]
-impl<C> IntoLayer<C> for Vec<JwtAuthorizer<C>>
+impl<C, T> IntoLayer<C> for T
 where
+    T: IntoIterator<Item = JwtAuthorizer<C>> + Send + Sync,
     C: Clone + DeserializeOwned + Send + Sync,
 {
     async fn into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
