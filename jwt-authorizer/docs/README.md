@@ -21,7 +21,7 @@ JWT authoriser Layer for Axum and Tonic.
 ## Usage Example
 
 ```rust
-# use jwt_authorizer::{AuthError, IntoLayer, JwtAuthorizer, JwtClaims, RegisteredClaims};
+# use jwt_authorizer::{AuthError, Authorizer, JwtAuthorizer, JwtClaims, RegisteredClaims, IntoLayer};
 # use axum::{routing::get, Router};
 # use serde::Deserialize;
 
@@ -29,12 +29,12 @@ JWT authoriser Layer for Axum and Tonic.
 
     // let's create an authorizer builder from a JWKS Endpoint
     // (a serializable struct can be used to represent jwt claims, JwtAuthorizer<RegisteredClaims> is the default)
-    let jwt_auth: JwtAuthorizer =
-                    JwtAuthorizer::from_jwks_url("http://localhost:3000/oidc/jwks");
+    let auth: Authorizer =
+                    JwtAuthorizer::from_jwks_url("http://localhost:3000/oidc/jwks").build().await.unwrap();
 
     // adding the authorization layer
     let app = Router::new().route("/protected", get(protected))
-            .layer(jwt_auth.into_layer().await.unwrap());
+            .layer(auth.into_layer());
 
     // proteced handler with user injection (mapping some jwt claims)
     async fn protected(JwtClaims(user): JwtClaims<RegisteredClaims>) -> Result<String, AuthError> {

@@ -9,8 +9,8 @@ use serde::de::DeserializeOwned;
 use crate::{
     error::{AuthError, InitError},
     jwks::{key_store_manager::KeyStoreManager, KeyData, KeySource},
-    layer::{self, JwtSource},
-    oidc, Refresh,
+    layer::{self, AsyncAuthorizationLayer, JwtSource},
+    oidc, Refresh, RegisteredClaims,
 };
 
 pub trait ClaimsChecker<C> {
@@ -34,7 +34,7 @@ where
     }
 }
 
-pub struct Authorizer<C>
+pub struct Authorizer<C = RegisteredClaims>
 where
     C: Clone,
 {
@@ -230,6 +230,40 @@ where
                 .typed_get::<headers::Cookie>()
                 .and_then(|c| c.get(name.as_str()).map(String::from)),
         }
+    }
+}
+
+pub trait IntoLayer<C>
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into_layer(self) -> AsyncAuthorizationLayer<C>;
+}
+
+impl<C> IntoLayer<C> for Vec<Authorizer<C>>
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
+        AsyncAuthorizationLayer::new(self.into_iter().map(Arc::new).collect())
+    }
+}
+
+impl<C, const N: usize> IntoLayer<C> for [Authorizer<C>; N]
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
+        AsyncAuthorizationLayer::new(self.into_iter().map(Arc::new).collect())
+    }
+}
+
+impl<C> IntoLayer<C> for Authorizer<C>
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
+        AsyncAuthorizationLayer::new(vec![Arc::new(self)])
     }
 }
 

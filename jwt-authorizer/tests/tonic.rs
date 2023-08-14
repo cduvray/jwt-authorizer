@@ -83,7 +83,7 @@ async fn app(
     jwt_auth: JwtAuthorizer<User>,
     expected_sub: String,
 ) -> AsyncAuthorizationService<Buffer<tonic::transport::server::Routes, http::Request<tonic::transport::Body>>, User> {
-    let layer = jwt_auth.into_layer().await.unwrap();
+    let layer = jwt_auth.build().await.unwrap().into_layer();
     tonic::transport::Server::builder()
         .layer(layer)
         .layer(tower::buffer::BufferLayer::new(1))

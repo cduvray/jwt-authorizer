@@ -1,8 +1,6 @@
-use axum::async_trait;
 use axum::http::Request;
 use futures_core::ready;
 use futures_util::future::{self, BoxFuture};
-use futures_util::stream::{FuturesUnordered, StreamExt};
 use jsonwebtoken::TokenData;
 use pin_project::pin_project;
 use serde::de::DeserializeOwned;
@@ -184,7 +182,7 @@ where
     }
 
     /// Build axum layer
-    #[deprecated(since = "0.10.0", note = "please use `to_layer()` instead")]
+    #[deprecated(since = "0.10.0", note = "please use `IntoLayer::into_layer()` instead")]
     pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
         let auth = Arc::new(
@@ -192,57 +190,11 @@ where
         );
         Ok(AsyncAuthorizationLayer::new(vec![auth]))
     }
-}
 
-#[async_trait]
-impl<C> IntoLayer<C> for JwtAuthorizer<C>
-where
-    C: Clone + DeserializeOwned + Send + Sync,
-{
-    async fn into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+    pub async fn build(self) -> Result<Authorizer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
-        let auth = Arc::new(
-            Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await?,
-        );
-        Ok(AsyncAuthorizationLayer::new(vec![auth]))
-    }
-}
 
-#[async_trait]
-impl<C, T> IntoLayer<C> for T
-where
-    T: IntoIterator<Item = JwtAuthorizer<C>> + Send + Sync,
-    C: Clone + DeserializeOwned + Send + Sync,
-{
-    async fn into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
-        let mut errs = Vec::<InitError>::new();
-        let mut auths = Vec::<Arc<Authorizer<C>>>::new();
-        let mut auths_futs: FuturesUnordered<_> = self
-            .into_iter()
-            .map(|a| {
-                Authorizer::build(
-                    a.key_source_type,
-                    a.claims_checker,
-                    a.refresh,
-                    a.validation.unwrap_or_default(),
-                    a.jwt_source,
-                )
-            })
-            .collect();
-
-        while let Some(a) = auths_futs.next().await {
-            match a {
-                Ok(res) => auths.push(Arc::new(res)),
-                Err(err) => errs.push(err),
-            }
-        }
-
-        if let Some(e) = errs.into_iter().next() {
-            // TODO: composite build error (containing all errors)
-            Err(e)
-        } else {
-            Ok(AsyncAuthorizationLayer::new(auths))
-        }
+        Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await
     }
 }
 
@@ -328,14 +280,6 @@ where
     fn layer(&self, inner: S) -> Self::Service {
         AsyncAuthorizationService::new(inner, self.auths.clone())
     }
-}
-
-#[async_trait]
-pub trait IntoLayer<C>
-where
-    C: Clone + DeserializeOwned + Send,
-{
-    async fn into_layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError>;
 }
 
 // ----------  AsyncAuthorizationService  --------
@@ -486,33 +430,40 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{IntoLayer, JwtAuthorizer};
+    use crate::{authorizer::Authorizer, IntoLayer, JwtAuthorizer, RegisteredClaims};
+
+    use super::AsyncAuthorizationLayer;
+
+    #[tokio::test]
+    async fn auth_into_layer() {
+        let auth1: Authorizer = JwtAuthorizer::from_secret("aaa").build().await.unwrap();
+        let layer = auth1.into_layer();
+        assert_eq!(1, layer.auths.len());
+    }
+
+    #[tokio::test]
+    async fn auths_into_layer() {
+        let auth1 = JwtAuthorizer::from_secret("aaa").build().await.unwrap();
+        let auth2 = JwtAuthorizer::from_secret("bbb").build().await.unwrap();
+
+        let layer: AsyncAuthorizationLayer<RegisteredClaims> = [auth1, auth2].into_layer();
+        assert_eq!(2, layer.auths.len());
+    }
+
+    #[tokio::test]
+    async fn vec_auths_into_layer() {
+        let auth1 = JwtAuthorizer::from_secret("aaa").build().await.unwrap();
+        let auth2 = JwtAuthorizer::from_secret("bbb").build().await.unwrap();
+
+        let layer: AsyncAuthorizationLayer<RegisteredClaims> = vec![auth1, auth2].into_layer();
+        assert_eq!(2, layer.auths.len());
+    }
 
     #[tokio::test]
     async fn jwt_auth_to_layer() {
         let auth1: JwtAuthorizer = JwtAuthorizer::from_secret("aaa");
-        let layer = auth1.into_layer().await;
+        #[allow(deprecated)]
+        let layer = auth1.layer().await;
         assert!(layer.is_ok());
-    }
-
-    #[tokio::test]
-    async fn vec_to_layer() {
-        let auth1: JwtAuthorizer = JwtAuthorizer::from_secret("aaa");
-        let auth2: JwtAuthorizer = JwtAuthorizer::from_secret("bbb");
-        let av = vec![auth1, auth2];
-        let layer = av.into_layer().await;
-        assert!(layer.is_ok());
-    }
-
-    #[tokio::test]
-    async fn vec_to_layer_errors() {
-        let auth1: JwtAuthorizer = JwtAuthorizer::from_ec_pem("aaa");
-        let auth2: JwtAuthorizer = JwtAuthorizer::from_ed_pem("bbb");
-        let av = vec![auth1, auth2];
-        let layer = av.into_layer().await;
-        assert!(layer.is_err());
-        if let Err(err) = layer {
-            assert_eq!(err.to_string(), "No such file or directory (os error 2)");
-        }
     }
 }

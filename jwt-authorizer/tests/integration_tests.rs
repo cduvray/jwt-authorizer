@@ -104,7 +104,7 @@ async fn app(jwt_auth: JwtAuthorizer<User>) -> Router {
     let protected_route: Router = Router::new()
         .route("/protected", get(protected_handler))
         .route("/protected-with-user", get(protected_with_user))
-        .layer(jwt_auth.into_layer().await.unwrap());
+        .layer(jwt_auth.build().await.unwrap().into_layer());
 
     Router::new().merge(pub_route).merge(protected_route)
 }

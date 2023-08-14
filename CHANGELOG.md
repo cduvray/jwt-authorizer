@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 0.11 (2023-xx-xx)
 
 - support for multiple authorizers
-  - JwtAuthorizer.layer() deprecated in favor of JwtAuthorizer.into_layer()
+  - JwtAuthorizer::layer() deprecated in favor of JwtAuthorizer::build() and IntoLayer::into_layer()
 
 ## 0.10.1 (2023-07-11)
 
