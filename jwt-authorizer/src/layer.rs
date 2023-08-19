@@ -218,24 +218,22 @@ where
     type Future = BoxFuture<'static, Result<Request<B>, AuthError>>;
 
     fn authorize(&self, mut request: Request<B>) -> Self::Future {
-        let tkns_auths: Vec<(Option<String>, Arc<Authorizer<C>>)> = self
+        let tkns_auths: Vec<(String, Arc<Authorizer<C>>)> = self
             .auths
             .iter()
-            .map(|a| (a.extract_token(request.headers()), a.clone()))
+            .filter_map(|a| a.extract_token(request.headers()).map(|t| (t, a.clone())))
             .collect();
 
-        if !tkns_auths.iter().any(|(t, _)| t.is_some()) {
+        if tkns_auths.is_empty() {
             return Box::pin(future::ready(Err(AuthError::MissingToken())));
         }
 
         Box::pin(async move {
             let mut token_data: Result<TokenData<C>, AuthError> = Err(AuthError::NoAuthorizer());
-            for (tkn, auth) in tkns_auths {
-                if let Some(token) = tkn {
-                    token_data = auth.check_auth(token.as_str()).await;
-                    if token_data.is_ok() {
-                        break;
-                    }
+            for (token, auth) in tkns_auths {
+                token_data = auth.check_auth(token.as_str()).await;
+                if token_data.is_ok() {
+                    break;
                 }
             }
             match token_data {
