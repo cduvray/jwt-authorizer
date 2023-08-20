@@ -461,7 +461,7 @@ mod tests {
     async fn jwt_auth_to_layer() {
         let auth1: JwtAuthorizer = JwtAuthorizer::from_secret("aaa");
         #[allow(deprecated)]
-        let layer = auth1.layer().await;
-        assert!(layer.is_ok());
+        let layer = auth1.layer().await.unwrap();
+        assert_eq!(1, layer.auths.len());
     }
 }
