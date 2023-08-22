@@ -58,6 +58,10 @@ pub enum AuthError {
 
     #[error("No Authorizer")]
     NoAuthorizer(),
+
+    /// Used when a claim extractor is used and no authorization layer is in front the handler
+    #[error("No Authorizer Layer")]
+    NoAuthorizerLayer(),
 }
 
 fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
@@ -120,6 +124,10 @@ impl From<AuthError> for Response<tonic::body::BoxBody> {
                 debug!("AuthErrors::NoAuthorizer");
                 tonic::Status::unauthenticated("error=\"invalid_token\"")
             }
+            AuthError::NoAuthorizerLayer() => {
+                debug!("AuthErrors::NoAuthorizerLayer");
+                tonic::Status::unauthenticated("error=\"no_authorizer_layer\"")
+            }
         }
         .to_http()
     }
@@ -176,6 +184,11 @@ impl IntoResponse for AuthError {
             AuthError::NoAuthorizer() => {
                 debug!("AuthErrors::NoAuthorizer");
                 response_wwwauth(StatusCode::FORBIDDEN, "error=\"invalid_token\"")
+            }
+            AuthError::NoAuthorizerLayer() => {
+                debug!("AuthErrors::NoAuthorizerLayer");
+                // TODO: should it be a standard error?
+                response_wwwauth(StatusCode::UNAUTHORIZED, "error=\"no_authorizer_layer\"")
             }
         }
     }

@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_from_public_500() {
+    async fn extract_from_public_401() {
         let app = Router::new().route(
             "/public",
             get(|JwtClaims(user): JwtClaims<User>| async move { format!("hello: {}", user.sub) }),
@@ -172,7 +172,23 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn extract_from_public_optional() {
+        let app = Router::new().route(
+            "/public",
+            get(|user: Option<JwtClaims<User>>| async move { format!("option: {}", user.is_none()) }),
+        );
+        let response = app
+            .oneshot(Request::builder().uri("/public").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"option: true");
     }
 
     // --------------------
