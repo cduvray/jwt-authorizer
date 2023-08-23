@@ -217,6 +217,9 @@ where
     type RequestBody = B;
     type Future = BoxFuture<'static, Result<Request<B>, AuthError>>;
 
+    /// The authorizers are sequentially applied (check_auth) until one of them validates the token.
+    /// If no authorizer validates the token the request is rejected.
+    ///
     fn authorize(&self, mut request: Request<B>) -> Self::Future {
         let tkns_auths: Vec<(String, Arc<Authorizer<C>>)> = self
             .auths
@@ -244,7 +247,7 @@ where
 
                     Ok(request)
                 }
-                Err(err) => Err(err), // TODO: error containing all errors (not just the last one)
+                Err(err) => Err(err), // TODO: error containing all errors (not just the last one) or to choose one?
             }
         })
     }

@@ -47,6 +47,11 @@ JWT authoriser Layer for Axum and Tonic.
 # };
 ```
 
+## Multiple Authorizers
+
+A layer can be built using multiple authorizers (`IntoLayer` is implemented for `[Authorizer<C>; N]` and for `Vec<Authorizer<C>>`).
+The authorizers are sequentially applied until one of them validates the token. If no authorizer validates it the request is rejected.
+
 ## Validation
 
 Validation configuration object.
