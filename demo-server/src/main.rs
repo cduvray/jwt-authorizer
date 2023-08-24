@@ -1,5 +1,7 @@
 use axum::{routing::get, Router};
-use jwt_authorizer::{error::InitError, AuthError, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
+use jwt_authorizer::{
+    error::InitError, AuthError, Authorizer, IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy,
+};
 use serde::Deserialize;
 use std::net::SocketAddr;
 use tower_http::trace::TraceLayer;
@@ -37,19 +39,21 @@ async fn main() -> Result<(), InitError> {
     // First let's create an authorizer builder from a Oidc Discovery
     // User is a struct deserializable from JWT claims representing the authorized user
     // let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc("https://accounts.google.com/")
-    let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(issuer_uri)
+    let auth: Authorizer<User> = JwtAuthorizer::from_oidc(issuer_uri)
         // .no_refresh()
         .refresh(Refresh {
             strategy: RefreshStrategy::Interval,
             ..Default::default()
         })
-        .check(claim_checker);
+        .check(claim_checker)
+        .build()
+        .await?;
 
     // actual router demo
     let api = Router::new()
         .route("/protected", get(protected))
         // adding the authorizer layer
-        .layer(jwt_auth.layer().await?);
+        .layer(auth.into_layer());
 
     let app = Router::new()
         // public endpoint

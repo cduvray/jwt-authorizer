@@ -12,7 +12,12 @@ mod tests {
         BoxError, Router,
     };
     use http::{header, HeaderValue};
-    use jwt_authorizer::{layer::JwtSource, validation::Validation, JwtAuthorizer, JwtClaims};
+    use jwt_authorizer::{
+        authorizer::Authorizer,
+        layer::{AsyncAuthorizationLayer, JwtSource},
+        validation::Validation,
+        IntoLayer, JwtAuthorizer, JwtClaims,
+    };
     use serde::Deserialize;
     use tower::{util::MapErrLayer, ServiceExt};
 
@@ -23,7 +28,7 @@ mod tests {
         sub: String,
     }
 
-    async fn app(jwt_auth: JwtAuthorizer<User>) -> Router {
+    async fn app(layer: AsyncAuthorizationLayer<User>) -> Router {
         Router::new().route("/public", get(|| async { "hello" })).route(
             "/protected",
             get(|JwtClaims(user): JwtClaims<User>| async move { format!("hello: {}", user.sub) }).layer(
@@ -32,14 +37,22 @@ mod tests {
                         tower::buffer::BufferLayer::new(1),
                         MapErrLayer::new(|e: BoxError| -> Infallible { panic!("{}", e) }),
                     ),
-                    jwt_auth.layer().await.unwrap(),
+                    layer,
                 ),
             ),
         )
     }
 
     async fn proteced_request_with_header(jwt_auth: JwtAuthorizer<User>, header_name: &str, header_value: &str) -> Response {
-        app(jwt_auth)
+        proteced_request_with_header_and_layer(jwt_auth.build().await.unwrap().into_layer(), header_name, header_value).await
+    }
+
+    async fn proteced_request_with_header_and_layer(
+        layer: AsyncAuthorizationLayer<User>,
+        header_name: &str,
+        header_value: &str,
+    ) -> Response {
+        app(layer)
             .await
             .oneshot(
                 Request::builder()
@@ -58,9 +71,12 @@ mod tests {
 
     #[tokio::test]
     async fn protected_without_jwt() {
-        let jwt_auth: JwtAuthorizer<User> = JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem");
+        let auth: Authorizer<User> = JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+            .build()
+            .await
+            .unwrap();
 
-        let response = app(jwt_auth)
+        let response = app(auth.into_layer())
             .await
             .oneshot(Request::builder().uri("/protected").body(Body::empty()).unwrap())
             .await
@@ -347,5 +363,54 @@ mod tests {
             response.headers().get(header::WWW_AUTHENTICATE).unwrap(),
             &"Bearer error=\"invalid_token\""
         );
+    }
+
+    // --------------------------
+    //      Multiple Authorizers
+    // --------------------------
+    #[tokio::test]
+    async fn multiple_authorizers() {
+        let auths: Vec<Authorizer<User>> = vec![
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
+                .build()
+                .await
+                .unwrap(),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .jwt_source(JwtSource::Cookie("ccc".to_owned()))
+                .build()
+                .await
+                .unwrap(),
+        ];
+
+        // OK
+        let response = proteced_request_with_header_and_layer(
+            auths.into_layer(),
+            header::COOKIE.as_str(),
+            &format!("ccc={}", common::JWT_RSA1_OK),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let auths: [Authorizer<User>; 2] = [
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
+                .build()
+                .await
+                .unwrap(),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .jwt_source(JwtSource::Cookie("ccc".to_owned()))
+                .build()
+                .await
+                .unwrap(),
+        ];
+
+        // Cookie missing
+        let response = proteced_request_with_header_and_layer(
+            auths.into_layer(),
+            header::COOKIE.as_str(),
+            &format!("bad_cookie={}", common::JWT_EC2_OK),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.headers().get(header::WWW_AUTHENTICATE).unwrap(), &"Bearer");
     }
 }
