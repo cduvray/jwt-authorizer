@@ -33,7 +33,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [pinned, stable]
+        build: [pinned, stable, nightly]
         include:
         - build: pinned
           os: ubuntu-22.04
@@ -41,9 +41,9 @@ jobs:
         - build: stable
           os: ubuntu-22.04
           rust: stable
-        # - build: nightly
-        #   os: ubuntu-22.04
-        #   rust: nightly
+        - build: nightly
+          os: ubuntu-22.04
+          rust: nightly
     steps:
     - uses: actions/checkout@v3
     - name: Install Rust
