@@ -91,8 +91,8 @@ impl Validation {
             HashSet::with_capacity(0)
         };
 
-        let aud = self.aud.clone().map(|v| HashSet::from_iter(v.into_iter()));
-        let iss = self.iss.clone().map(|v| HashSet::from_iter(v.into_iter()));
+        let aud = self.aud.clone().map(HashSet::from_iter);
+        let iss = self.iss.clone().map(HashSet::from_iter);
 
         let mut jwt_validation = jsonwebtoken::Validation::default();
 
