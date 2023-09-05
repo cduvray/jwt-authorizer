@@ -15,28 +15,28 @@ chrono = { version = "0.4", optional = true }
 futures-util = "0.3"
 futures-core = "0.3"
 headers = "0.3"
-jsonwebtoken = "8.2"
+jsonwebtoken = "8.3"
 http = "0.2"
 pin-project = "1.0"
 reqwest = { version = "0.11", default-features = false, features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "1.0.38"
+thiserror = "1.0"
 tokio = { version = "1.25", features = ["full"] }
 tower-http = { version = "0.4", features = ["trace", "auth"] }
 tower-layer = "0.3"
 tower-service = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tonic = { version = "0.9", optional = true }
+tonic = { version = "0.10", optional = true }
 time = { version = "0.3", optional = true }
 
 [dev-dependencies]
 hyper = { version = "0.14", features = ["full"] }
 lazy_static = "1.4.0"
-prost = "0.11"
+prost = "0.12"
 tower = { version = "0.4", features = ["util", "buffer"] }
-wiremock = "0.5"
+wiremock = "0.5.19"
 
 [features]
 default = ["default-tls", "chrono"]
