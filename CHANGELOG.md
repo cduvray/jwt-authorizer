@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## 0.11 (2023-xx-xx)
+## 0.11.0 (2023-09-06)
 
 - support for multiple authorizers
   - JwtAuthorizer::layer() deprecated in favor of JwtAuthorizer::build() and IntoLayer::into_layer()
+- better optional claims extraction (commit: 940acb17a1de82788bc72c3657da87609ce741e9)
+  - error 401 rather than INTERNAL_SERVER_ERROR, when no claims exist (no authorizer layer)
+  - do not log error
 
 ## 0.10.1 (2023-07-11)
 
