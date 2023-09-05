@@ -249,6 +249,15 @@ where
     }
 }
 
+impl<C> IntoLayer<C> for Vec<Arc<Authorizer<C>>>
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
+        AsyncAuthorizationLayer::new(self.into_iter().collect())
+    }
+}
+
 impl<C, const N: usize> IntoLayer<C> for [Authorizer<C>; N]
 where
     C: Clone + DeserializeOwned + Send,
@@ -258,12 +267,30 @@ where
     }
 }
 
+impl<C, const N: usize> IntoLayer<C> for [Arc<Authorizer<C>>; N]
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
+        AsyncAuthorizationLayer::new(self.into_iter().collect())
+    }
+}
+
 impl<C> IntoLayer<C> for Authorizer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
     fn into_layer(self) -> AsyncAuthorizationLayer<C> {
         AsyncAuthorizationLayer::new(vec![Arc::new(self)])
+    }
+}
+
+impl<C> IntoLayer<C> for Arc<Authorizer<C>>
+where
+    C: Clone + DeserializeOwned + Send,
+{
+    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
+        AsyncAuthorizationLayer::new(vec![self])
     }
 }
 

@@ -2,7 +2,7 @@ mod common;
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
+    use std::{convert::Infallible, sync::Arc};
 
     use axum::{
         body::Body,
@@ -370,6 +370,7 @@ mod tests {
     // --------------------------
     #[tokio::test]
     async fn multiple_authorizers() {
+        // 1) Vec
         let auths: Vec<Authorizer<User>> = vec![
             JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
                 .build()
@@ -391,6 +392,7 @@ mod tests {
         .await;
         assert_eq!(response.status(), StatusCode::OK);
 
+        // 2) Slice
         let auths: [Authorizer<User>; 2] = [
             JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
                 .build()
@@ -412,5 +414,47 @@ mod tests {
         .await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(response.headers().get(header::WWW_AUTHENTICATE).unwrap(), &"Bearer");
+
+        // 3) Arc
+        let auth1 = Arc::new(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
+                .build()
+                .await
+                .unwrap(),
+        );
+        let auth2 = Arc::new(
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .jwt_source(JwtSource::Cookie("ccc".to_owned()))
+                .build()
+                .await
+                .unwrap(),
+        );
+
+        // Slice/OK
+        let response = proteced_request_with_header_and_layer(
+            [auth1.clone(), auth2.clone()].into_layer(),
+            header::COOKIE.as_str(),
+            &format!("ccc={}", common::JWT_RSA1_OK),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Vec/OK
+        let response = proteced_request_with_header_and_layer(
+            vec![auth1, auth2.clone()].into_layer(),
+            header::COOKIE.as_str(),
+            &format!("ccc={}", common::JWT_RSA1_OK),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Arc/OK
+        let response = proteced_request_with_header_and_layer(
+            auth2.into_layer(),
+            header::COOKIE.as_str(),
+            &format!("ccc={}", common::JWT_RSA1_OK),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
