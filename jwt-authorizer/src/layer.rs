@@ -183,12 +183,12 @@ where
 
     /// Build axum layer
     #[deprecated(since = "0.10.0", note = "please use `IntoLayer::into_layer()` instead")]
-    pub async fn layer(self) -> Result<AsyncAuthorizationLayer<C>, InitError> {
+    pub async fn layer(self) -> Result<AuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
         let auth = Arc::new(
             Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await?,
         );
-        Ok(AsyncAuthorizationLayer::new(vec![auth]))
+        Ok(AuthorizationLayer::new(vec![auth]))
     }
 
     pub async fn build(self) -> Result<Authorizer<C>, InitError> {
@@ -199,7 +199,7 @@ where
 }
 
 /// Trait for authorizing requests.
-pub trait AsyncAuthorizer<B> {
+pub trait Authorize<B> {
     type RequestBody;
     type Future: Future<Output = Result<Request<Self::RequestBody>, AuthError>>;
 
@@ -209,7 +209,7 @@ pub trait AsyncAuthorizer<B> {
     fn authorize(&self, request: Request<B>) -> Self::Future;
 }
 
-impl<B, S, C> AsyncAuthorizer<B> for AsyncAuthorizationService<S, C>
+impl<B, S, C> Authorize<B> for AuthorizationService<S, C>
 where
     B: Send + Sync + 'static,
     C: Clone + DeserializeOwned + Send + Sync + 'static,
@@ -256,34 +256,34 @@ where
 // -------------- Layer -----------------
 
 #[derive(Clone)]
-pub struct AsyncAuthorizationLayer<C>
+pub struct AuthorizationLayer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
     auths: Vec<Arc<Authorizer<C>>>,
 }
 
-impl<C> AsyncAuthorizationLayer<C>
+impl<C> AuthorizationLayer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    pub fn new(auths: Vec<Arc<Authorizer<C>>>) -> AsyncAuthorizationLayer<C> {
+    pub fn new(auths: Vec<Arc<Authorizer<C>>>) -> AuthorizationLayer<C> {
         Self { auths }
     }
 }
 
-impl<S, C> Layer<S> for AsyncAuthorizationLayer<C>
+impl<S, C> Layer<S> for AuthorizationLayer<C>
 where
     C: Clone + DeserializeOwned + Send + Sync,
 {
-    type Service = AsyncAuthorizationService<S, C>;
+    type Service = AuthorizationService<S, C>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        AsyncAuthorizationService::new(inner, self.auths.clone())
+        AuthorizationService::new(inner, self.auths.clone())
     }
 }
 
-// ----------  AsyncAuthorizationService  --------
+// ----------  AuthorizationService  --------
 
 /// Source of the bearer token
 #[derive(Clone)]
@@ -301,7 +301,7 @@ pub enum JwtSource {
 }
 
 #[derive(Clone)]
-pub struct AsyncAuthorizationService<S, C>
+pub struct AuthorizationService<S, C>
 where
     C: Clone + DeserializeOwned + Send + Sync,
 {
@@ -309,7 +309,7 @@ where
     pub auths: Vec<Arc<Authorizer<C>>>,
 }
 
-impl<S, C> AsyncAuthorizationService<S, C>
+impl<S, C> AuthorizationService<S, C>
 where
     C: Clone + DeserializeOwned + Send + Sync,
 {
@@ -328,19 +328,19 @@ where
     }
 }
 
-impl<S, C> AsyncAuthorizationService<S, C>
+impl<S, C> AuthorizationService<S, C>
 where
     C: Clone + DeserializeOwned + Send + Sync,
 {
     /// Authorize requests using a custom scheme.
     ///
     /// The `Authorization` header is required to have the value provided.
-    pub fn new(inner: S, auths: Vec<Arc<Authorizer<C>>>) -> AsyncAuthorizationService<S, C> {
+    pub fn new(inner: S, auths: Vec<Arc<Authorizer<C>>>) -> AuthorizationService<S, C> {
         Self { inner, auths }
     }
 }
 
-impl<ReqBody, S, C> Service<Request<ReqBody>> for AsyncAuthorizationService<S, C>
+impl<ReqBody, S, C> Service<Request<ReqBody>> for AuthorizationService<S, C>
 where
     ReqBody: Send + Sync + 'static,
     S: Service<Request<ReqBody>> + Clone,
@@ -370,7 +370,7 @@ where
 }
 
 #[pin_project]
-/// Response future for [`AsyncAuthorizationService`].
+/// Response future for [`AuthorizationService`].
 pub struct ResponseFuture<S, ReqBody, C>
 where
     S: Service<Request<ReqBody>>,
@@ -378,7 +378,7 @@ where
     C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
     #[pin]
-    state: State<<AsyncAuthorizationService<S, C> as AsyncAuthorizer<ReqBody>>::Future, S::Future>,
+    state: State<<AuthorizationService<S, C> as Authorize<ReqBody>>::Future, S::Future>,
     service: S,
 }
 
@@ -433,7 +433,7 @@ where
 mod tests {
     use crate::{authorizer::Authorizer, IntoLayer, JwtAuthorizer, RegisteredClaims};
 
-    use super::AsyncAuthorizationLayer;
+    use super::AuthorizationLayer;
 
     #[tokio::test]
     async fn auth_into_layer() {
@@ -447,7 +447,7 @@ mod tests {
         let auth1 = JwtAuthorizer::from_secret("aaa").build().await.unwrap();
         let auth2 = JwtAuthorizer::from_secret("bbb").build().await.unwrap();
 
-        let layer: AsyncAuthorizationLayer<RegisteredClaims> = [auth1, auth2].into_layer();
+        let layer: AuthorizationLayer<RegisteredClaims> = [auth1, auth2].into_layer();
         assert_eq!(2, layer.auths.len());
     }
 
@@ -456,7 +456,7 @@ mod tests {
         let auth1 = JwtAuthorizer::from_secret("aaa").build().await.unwrap();
         let auth2 = JwtAuthorizer::from_secret("bbb").build().await.unwrap();
 
-        let layer: AsyncAuthorizationLayer<RegisteredClaims> = vec![auth1, auth2].into_layer();
+        let layer: AuthorizationLayer<RegisteredClaims> = vec![auth1, auth2].into_layer();
         assert_eq!(2, layer.auths.len());
     }
 
