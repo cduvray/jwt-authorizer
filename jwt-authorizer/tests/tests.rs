@@ -126,8 +126,9 @@ mod tests {
 
     #[tokio::test]
     async fn protected_with_claims_check() {
+        let b = true; // to test closures
         let rsp_ok = make_proteced_request(
-            JwtAuthorizer::from_rsa_pem("../config/rsa-public2.pem").check(|_| true),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public2.pem").check(move |_| b),
             common::JWT_RSA2_OK,
         )
         .await;

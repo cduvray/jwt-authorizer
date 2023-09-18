@@ -20,14 +20,14 @@ pub trait ClaimsChecker<C> {
 #[derive(Clone)]
 pub struct FnClaimsChecker<C>
 where
-    C: Clone,
+    C: Clone + Send + Sync,
 {
-    pub checker_fn: fn(&C) -> bool,
+    pub checker_fn: Arc<Box<dyn Fn(&C) -> bool + Send + Sync>>,
 }
 
 impl<C> ClaimsChecker<C> for FnClaimsChecker<C>
 where
-    C: Clone,
+    C: Clone + Send + Sync,
 {
     fn check(&self, claims: &C) -> bool {
         (self.checker_fn)(claims)
@@ -36,7 +36,7 @@ where
 
 pub struct Authorizer<C = RegisteredClaims>
 where
-    C: Clone,
+    C: Clone + Send,
 {
     pub key_source: KeySource,
     pub claims_checker: Option<FnClaimsChecker<C>>,
