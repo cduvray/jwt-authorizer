@@ -14,7 +14,7 @@ mod tests {
     use http::{header, HeaderValue};
     use jwt_authorizer::{
         authorizer::Authorizer,
-        layer::{AsyncAuthorizationLayer, JwtSource},
+        layer::{AuthorizationLayer, JwtSource},
         validation::Validation,
         IntoLayer, JwtAuthorizer, JwtClaims,
     };
@@ -28,7 +28,7 @@ mod tests {
         sub: String,
     }
 
-    async fn app(layer: AsyncAuthorizationLayer<User>) -> Router {
+    async fn app(layer: AuthorizationLayer<User>) -> Router {
         Router::new().route("/public", get(|| async { "hello" })).route(
             "/protected",
             get(|JwtClaims(user): JwtClaims<User>| async move { format!("hello: {}", user.sub) }).layer(
@@ -48,7 +48,7 @@ mod tests {
     }
 
     async fn proteced_request_with_header_and_layer(
-        layer: AsyncAuthorizationLayer<User>,
+        layer: AuthorizationLayer<User>,
         header_name: &str,
         header_value: &str,
     ) -> Response {

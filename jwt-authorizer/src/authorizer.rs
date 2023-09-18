@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use crate::{
     error::{AuthError, InitError},
     jwks::{key_store_manager::KeyStoreManager, KeyData, KeySource},
-    layer::{self, AsyncAuthorizationLayer, JwtSource},
+    layer::{self, AuthorizationLayer, JwtSource},
     oidc, Refresh, RegisteredClaims,
 };
 
@@ -237,15 +237,15 @@ pub trait IntoLayer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    fn into_layer(self) -> AsyncAuthorizationLayer<C>;
+    fn into_layer(self) -> AuthorizationLayer<C>;
 }
 
 impl<C> IntoLayer<C> for Vec<Authorizer<C>>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
-        AsyncAuthorizationLayer::new(self.into_iter().map(Arc::new).collect())
+    fn into_layer(self) -> AuthorizationLayer<C> {
+        AuthorizationLayer::new(self.into_iter().map(Arc::new).collect())
     }
 }
 
@@ -253,8 +253,8 @@ impl<C> IntoLayer<C> for Vec<Arc<Authorizer<C>>>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
-        AsyncAuthorizationLayer::new(self.into_iter().collect())
+    fn into_layer(self) -> AuthorizationLayer<C> {
+        AuthorizationLayer::new(self.into_iter().collect())
     }
 }
 
@@ -262,8 +262,8 @@ impl<C, const N: usize> IntoLayer<C> for [Authorizer<C>; N]
 where
     C: Clone + DeserializeOwned + Send,
 {
-    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
-        AsyncAuthorizationLayer::new(self.into_iter().map(Arc::new).collect())
+    fn into_layer(self) -> AuthorizationLayer<C> {
+        AuthorizationLayer::new(self.into_iter().map(Arc::new).collect())
     }
 }
 
@@ -271,8 +271,8 @@ impl<C, const N: usize> IntoLayer<C> for [Arc<Authorizer<C>>; N]
 where
     C: Clone + DeserializeOwned + Send,
 {
-    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
-        AsyncAuthorizationLayer::new(self.into_iter().collect())
+    fn into_layer(self) -> AuthorizationLayer<C> {
+        AuthorizationLayer::new(self.into_iter().collect())
     }
 }
 
@@ -280,8 +280,8 @@ impl<C> IntoLayer<C> for Authorizer<C>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
-        AsyncAuthorizationLayer::new(vec![Arc::new(self)])
+    fn into_layer(self) -> AuthorizationLayer<C> {
+        AuthorizationLayer::new(vec![Arc::new(self)])
     }
 }
 
@@ -289,8 +289,8 @@ impl<C> IntoLayer<C> for Arc<Authorizer<C>>
 where
     C: Clone + DeserializeOwned + Send,
 {
-    fn into_layer(self) -> AsyncAuthorizationLayer<C> {
-        AsyncAuthorizationLayer::new(vec![self])
+    fn into_layer(self) -> AuthorizationLayer<C> {
+        AuthorizationLayer::new(vec![self])
     }
 }
 
