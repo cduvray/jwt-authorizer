@@ -154,8 +154,13 @@ where
 
     /// configures token content check (custom function), if false a 403 will be sent.
     /// (AuthError::InvalidClaims())
-    pub fn check(mut self, checker_fn: fn(&C) -> bool) -> AuthorizerBuilder<C> {
-        self.claims_checker = Some(FnClaimsChecker { checker_fn });
+    pub fn check<F>(mut self, checker_fn: F) -> AuthorizerBuilder<C>
+    where
+        F: Fn(&C) -> bool + Send + Sync + 'static,
+    {
+        self.claims_checker = Some(FnClaimsChecker {
+            checker_fn: Arc::new(Box::new(checker_fn)),
+        });
 
         self
     }
