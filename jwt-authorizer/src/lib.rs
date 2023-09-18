@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 
 pub use self::error::AuthError;
 pub use authorizer::{Authorizer, IntoLayer};
-pub use builder::JwtAuthorizer;
+pub use builder::{AuthorizerBuilder, JwtAuthorizer};
 pub use claims::{NumericDate, OneOrArray, RegisteredClaims};
 pub use jwks::key_store_manager::{Refresh, RefreshStrategy};
 pub use validation::Validation;
