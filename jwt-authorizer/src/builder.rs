@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    authorizer::{FnClaimsChecker, KeySourceType},
+    authorizer::{ClaimsCheckerFn, KeySourceType},
     error::InitError,
     layer::{AuthorizationLayer, JwtSource},
     Authorizer, Refresh, RefreshStrategy, RegisteredClaims, Validation,
@@ -19,7 +19,7 @@ where
 {
     key_source_type: KeySourceType,
     refresh: Option<Refresh>,
-    claims_checker: Option<FnClaimsChecker<C>>,
+    claims_checker: Option<ClaimsCheckerFn<C>>,
     validation: Option<Validation>,
     jwt_source: JwtSource,
 }
@@ -158,9 +158,7 @@ where
     where
         F: Fn(&C) -> bool + Send + Sync + 'static,
     {
-        self.claims_checker = Some(FnClaimsChecker {
-            checker_fn: Arc::new(Box::new(checker_fn)),
-        });
+        self.claims_checker = Some(Arc::new(Box::new(checker_fn)));
 
         self
     }
