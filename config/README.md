@@ -18,3 +18,7 @@ curve name: prime256v1 (secp256r1, secp384r1)
 (Ed25519 - EdDSA signature scheme using SHA-512 (SHA-2) and Curve25519)
 
 > openssl genpkey -algorithm ed25519
+
+## JWK - combined file of above keys
+
+> rnbyc  -j -f rsa-public1.pem -k rsa01 -a RS256 -f ecdsa-public1.pem -k ec01 -a ES256  -f ed25519-public1.pem -k ed01 -a EdDSA -o public1.jw

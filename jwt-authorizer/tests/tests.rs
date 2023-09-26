@@ -114,6 +114,21 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
+
+        let response = make_proteced_request(JwtAuthorizer::from_jwks("../config/public1.jwks"), common::JWT_RSA1_OK).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"hello: b@b.com");
+
+        let response = make_proteced_request(JwtAuthorizer::from_jwks("../config/public1.jwks"), common::JWT_EC1_OK).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"hello: b@b.com");
+
+        let response = make_proteced_request(JwtAuthorizer::from_jwks("../config/public1.jwks"), common::JWT_ED1_OK).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"hello: b@b.com");
     }
 
     #[tokio::test]
