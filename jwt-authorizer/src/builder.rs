@@ -54,6 +54,26 @@ where
         }
     }
 
+    pub fn from_jwks(path: &str) -> AuthorizerBuilder<C> {
+        AuthorizerBuilder {
+            key_source_type: KeySourceType::JwksPath(path.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+            jwt_source: JwtSource::AuthorizationHeader,
+        }
+    }
+
+    pub fn from_jwks_text(text: &str) -> AuthorizerBuilder<C> {
+        AuthorizerBuilder {
+            key_source_type: KeySourceType::JwksString(text.to_owned()),
+            refresh: Default::default(),
+            claims_checker: None,
+            validation: None,
+            jwt_source: JwtSource::AuthorizationHeader,
+        }
+    }
+
     /// Builds Authorizer Layer from a RSA PEM file
     pub fn from_rsa_pem(path: &str) -> AuthorizerBuilder<C> {
         AuthorizerBuilder {

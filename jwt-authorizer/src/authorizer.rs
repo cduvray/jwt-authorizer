@@ -41,6 +41,7 @@ pub enum KeySourceType {
     EDString(String),
     Secret(String),
     Jwks(String),
+    JwksPath(String),
     JwksString(String), // TODO: expose JwksString in JwtAuthorizer or remove it
     Discovery(String),
 }
@@ -148,13 +149,36 @@ where
                     jwt_source,
                 }
             }
+            KeySourceType::JwksPath(path) => {
+                let set: JwkSet = serde_json::from_slice(&read_data(path.as_str())?)?;
+                let keys = set
+                    .keys
+                    .iter()
+                    .map(|k| match KeyData::from_jwk(k) {
+                        Ok(kdata) => Ok(Arc::new(kdata)),
+                        Err(err) => Err(InitError::KeyDecodingError(err)),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Authorizer {
+                    key_source: KeySource::MultiKeySource(keys.into()),
+                    claims_checker,
+                    validation,
+                    jwt_source,
+                }
+            }
             KeySourceType::JwksString(jwks_str) => {
                 // TODO: expose it in JwtAuthorizer or remove
                 let set: JwkSet = serde_json::from_str(jwks_str.as_str())?;
-                // TODO: replace [0] by kid/alg search
-                let k = KeyData::from_jwk(&set.keys[0]).map_err(InitError::KeyDecodingError)?;
+                let keys = set
+                    .keys
+                    .iter()
+                    .map(|k| match KeyData::from_jwk(k) {
+                        Ok(kdata) => Ok(Arc::new(kdata)),
+                        Err(err) => Err(InitError::KeyDecodingError(err)),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
                 Authorizer {
-                    key_source: KeySource::SingleKeySource(Arc::new(k)),
+                    key_source: KeySource::MultiKeySource(keys.into()),
                     claims_checker,
                     validation,
                     jwt_source,
@@ -363,6 +387,28 @@ mod tests {
         .unwrap();
         let k = a.key_source.get_key(Header::new(Algorithm::EdDSA));
         assert!(k.await.is_ok());
+
+        let a = Authorizer::<Value>::build(
+            KeySourceType::JwksPath("../config/public1.jwks".to_owned()),
+            None,
+            None,
+            Validation::new(),
+            JwtSource::AuthorizationHeader,
+        )
+        .await
+        .unwrap();
+        a.key_source
+            .get_key(Header::new(Algorithm::RS256))
+            .await
+            .expect("Couldn't get RS256 key from jwk");
+        a.key_source
+            .get_key(Header::new(Algorithm::ES256))
+            .await
+            .expect("Couldn't get ES256 key from jwk");
+        a.key_source
+            .get_key(Header::new(Algorithm::EdDSA))
+            .await
+            .expect("Couldn't get EdDSA key from jwk");
     }
 
     #[tokio::test]

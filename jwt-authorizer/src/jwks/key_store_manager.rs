@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 
 use crate::error::AuthError;
 
-use super::KeyData;
+use super::{KeyData, KeySet};
 
 /// Defines the strategy for the JWKS refresh.
 #[derive(Clone)]
@@ -59,7 +59,7 @@ pub struct KeyStoreManager {
 
 pub struct KeyStore {
     /// key set
-    keys: Vec<Arc<KeyData>>,
+    keys: KeySet,
     /// time of the last successfully loaded jwkset
     load_time: Option<Instant>,
     /// time of the last failed load
@@ -72,7 +72,7 @@ impl KeyStoreManager {
             key_url,
             refresh,
             keystore: Arc::new(Mutex::new(KeyStore {
-                keys: vec![],
+                keys: KeySet::default(),
                 load_time: None,
                 fail_time: None,
             })),
@@ -87,11 +87,7 @@ impl KeyStoreManager {
                 if ks_gard.can_refresh(self.refresh.refresh_interval, self.refresh.retry_interval) {
                     ks_gard.refresh(&self.key_url, &[]).await?;
                 }
-                if let Some(ref kid) = header.kid {
-                    ks_gard.find_kid(kid).ok_or_else(|| AuthError::InvalidKid(kid.to_owned()))?
-                } else {
-                    ks_gard.find_alg(&header.alg).ok_or(AuthError::InvalidKeyAlg(header.alg))?
-                }
+                ks_gard.get_key(header)?
             }
             RefreshStrategy::KeyNotFound => {
                 if let Some(ref kid) = header.kid {
@@ -133,11 +129,7 @@ impl KeyStoreManager {
                 {
                     ks_gard.refresh(&self.key_url, &[]).await?;
                 }
-                if let Some(ref kid) = header.kid {
-                    ks_gard.find_kid(kid).ok_or_else(|| AuthError::InvalidKid(kid.to_owned()))?
-                } else {
-                    ks_gard.find_alg(&header.alg).ok_or(AuthError::InvalidKeyAlg(header.alg))?
-                }
+                ks_gard.get_key(header)?
             }
         };
         Ok(key.clone())
@@ -186,7 +178,7 @@ impl KeyStore {
                 if keys.is_empty() {
                     Err(AuthError::JwksRefreshError("No valid keys in the Jwk Set!".to_owned()))
                 } else {
-                    self.keys = keys;
+                    self.keys = keys.into();
                     self.fail_time = None;
                     Ok(())
                 }
@@ -199,17 +191,21 @@ impl KeyStore {
 
     /// Find the key in the set that matches the given key id, if any.
     pub fn find_kid(&self, kid: &str) -> Option<&Arc<KeyData>> {
-        self.keys.iter().find(|k| k.kid.is_some() && k.kid.as_ref().unwrap() == kid)
+        self.keys.find_kid(kid)
     }
 
     /// Find the key in the set that matches the given key id, if any.
     pub fn find_alg(&self, alg: &Algorithm) -> Option<&Arc<KeyData>> {
-        self.keys.iter().find(|k| k.alg.contains(alg))
+        self.keys.find_alg(alg)
+    }
+
+    fn get_key(&self, header: &jsonwebtoken::Header) -> Result<&Arc<KeyData>, AuthError> {
+        self.keys.get_key(header)
     }
 
     /// Find first key.
     pub fn find_first(&self) -> Option<&Arc<KeyData>> {
-        self.keys.get(0)
+        self.keys.first()
     }
 }
 
@@ -227,7 +223,7 @@ mod tests {
     };
 
     use crate::jwks::key_store_manager::{KeyStore, KeyStoreManager};
-    use crate::jwks::KeyData;
+    use crate::jwks::{KeyData, KeySet};
     use crate::{Refresh, RefreshStrategy};
 
     const JWK_RSA01: &str = r#"{
@@ -281,7 +277,7 @@ mod tests {
     fn keystore_can_refresh() {
         // FAIL, NO LOAD
         let ks = KeyStore {
-            keys: vec![],
+            keys: KeySet::default(),
             fail_time: Instant::now().checked_sub(Duration::from_secs(5)),
             load_time: None,
         };
@@ -290,7 +286,7 @@ mod tests {
 
         // NO FAIL, LOAD
         let ks = KeyStore {
-            keys: vec![],
+            keys: KeySet::default(),
             fail_time: None,
             load_time: Instant::now().checked_sub(Duration::from_secs(5)),
         };
@@ -299,7 +295,7 @@ mod tests {
 
         // FAIL, LOAD
         let ks = KeyStore {
-            keys: vec![],
+            keys: KeySet::default(),
             fail_time: Instant::now().checked_sub(Duration::from_secs(5)),
             load_time: Instant::now().checked_sub(Duration::from_secs(10)),
         };
@@ -318,7 +314,8 @@ mod tests {
             keys: vec![
                 Arc::new(KeyData::from_jwk(&jwk0).unwrap()),
                 Arc::new(KeyData::from_jwk(&jwk1).unwrap()),
-            ],
+            ]
+            .into(),
         };
         assert!(ks.find_kid("rsa01").is_some());
         assert!(ks.find_kid("ec01").is_some());
@@ -331,7 +328,7 @@ mod tests {
         let ks = KeyStore {
             load_time: None,
             fail_time: None,
-            keys: vec![Arc::new(KeyData::from_jwk(&jwk0).unwrap())],
+            keys: vec![Arc::new(KeyData::from_jwk(&jwk0).unwrap())].into(),
         };
         assert!(ks.find_alg(&Algorithm::RS256).is_some());
         assert!(ks.find_alg(&Algorithm::EdDSA).is_none());
