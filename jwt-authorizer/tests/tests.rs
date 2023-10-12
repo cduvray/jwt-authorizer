@@ -94,6 +94,7 @@ mod tests {
 
     #[tokio::test]
     async fn protected_with_jwt() {
+        // ED PEM
         let response = make_proteced_request(
             JwtAuthorizer::from_ed_pem("../config/ed25519-public2.pem"),
             common::JWT_ED2_OK,
@@ -103,18 +104,21 @@ mod tests {
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
 
+        // ECDSA PEM
         let response =
             make_proteced_request(JwtAuthorizer::from_ec_pem("../config/ecdsa-public2.pem"), common::JWT_EC2_OK).await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
 
+        // RSA PEM
         let response =
             make_proteced_request(JwtAuthorizer::from_rsa_pem("../config/rsa-public2.pem"), common::JWT_RSA2_OK).await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
 
+        // JWKS
         let response = make_proteced_request(JwtAuthorizer::from_jwks("../config/public1.jwks"), common::JWT_RSA1_OK).await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
@@ -126,6 +130,16 @@ mod tests {
         assert_eq!(&body[..], b"hello: b@b.com");
 
         let response = make_proteced_request(JwtAuthorizer::from_jwks("../config/public1.jwks"), common::JWT_ED1_OK).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"hello: b@b.com");
+
+        // JWKS TEXT
+        let response = make_proteced_request(
+            JwtAuthorizer::from_jwks_text(include_str!("../../config/public1.jwks")),
+            common::JWT_ED1_OK,
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
