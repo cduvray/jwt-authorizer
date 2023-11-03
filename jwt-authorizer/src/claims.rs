@@ -1,8 +1,8 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time ignoring leap seconds.
 /// (https://www.rfc-editor.org/rfc/rfc7519#section-2)
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct NumericDate(i64);
 
 /// accesses the underlying value
@@ -32,7 +32,7 @@ impl From<NumericDate> for OffsetDateTime {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum OneOrArray<T> {
     One(T),
@@ -54,14 +54,21 @@ pub struct StringList(Vec<String>);
 /// Claims mentioned in the JWT specifications.
 ///
 /// https://www.rfc-editor.org/rfc/rfc7519#section-4.1
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct RegisteredClaims {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub iss: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sub: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub aud: Option<OneOrArray<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exp: Option<NumericDate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub nbf: Option<NumericDate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub iat: Option<NumericDate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub jti: Option<String>,
 }
 
@@ -146,8 +153,28 @@ mod tests {
             OneOrArray::Array(vec!["aud1".to_owned(), "aud2".to_owned()])
         );
         assert_eq!(claims.exp.unwrap(), NumericDate(1516240122));
+        assert_eq!(claims.nbf, None);
 
         let dt: DateTime<Utc> = claims.iat.unwrap().into();
         assert_eq!(dt, Utc.timestamp_opt(1516239022, 0).unwrap());
+    }
+
+    #[test]
+    fn rfc_claims_serde() {
+        let claims_str = r#"{
+                    "iss": "http://localhost:3001",
+                    "sub": "bob",
+                    "aud": ["aud1", "aud2"],
+                    "exp": 1516240122,
+                    "iat": 1516239022
+                }"#;
+
+        let claims: RegisteredClaims = serde_json::from_str(claims_str).expect("Failed RfcClaims deserialisation");
+        // assert_eq!(claims.iss.unwrap(), "http://localhost:3001");
+
+        let jwt_serd = serde_json::to_string(&claims).unwrap();
+        let mut trimed_claims = claims_str.to_owned();
+        trimed_claims.retain(|c| !c.is_whitespace());
+        assert_eq!(trimed_claims, jwt_serd);
     }
 }
