@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use jsonwebtoken::{jwk::Jwk, Algorithm, DecodingKey, Header};
 
@@ -29,7 +29,7 @@ impl KeyData {
     pub fn from_jwk(key: &Jwk) -> Result<KeyData, jsonwebtoken::errors::Error> {
         Ok(KeyData {
             kid: key.common.key_id.clone(),
-            alg: vec![key.common.algorithm.unwrap_or(Algorithm::RS256)], // TODO: is this good default?
+            alg: vec![Algorithm::from_str(key.common.key_algorithm.unwrap().to_string().as_str())?],
             key: DecodingKey::from_jwk(key)?,
         })
     }
