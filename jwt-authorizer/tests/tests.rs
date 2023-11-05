@@ -96,7 +96,7 @@ mod tests {
     async fn protected_with_jwt() {
         // ED PEM
         let response = make_proteced_request(
-            JwtAuthorizer::from_ed_pem("../config/ed25519-public2.pem"),
+            JwtAuthorizer::from_ed_pem("../config/ed25519-public2.pem").validation(Validation::new().aud(&["aud1"])),
             common::JWT_ED2_OK,
         )
         .await;
@@ -105,8 +105,11 @@ mod tests {
         assert_eq!(&body[..], b"hello: b@b.com");
 
         // ECDSA PEM
-        let response =
-            make_proteced_request(JwtAuthorizer::from_ec_pem("../config/ecdsa-public2.pem"), common::JWT_EC2_OK).await;
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public2.pem").validation(Validation::new().aud(&["aud1"])),
+            common::JWT_EC2_OK,
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
@@ -119,24 +122,37 @@ mod tests {
         assert_eq!(&body[..], b"hello: b@b.com");
 
         // JWKS
-        let response = make_proteced_request(JwtAuthorizer::from_jwks("../config/public1.jwks"), common::JWT_RSA1_OK).await;
+        let response = make_proteced_request(
+            JwtAuthorizer::from_jwks("../config/public1.jwks").validation(Validation::new().aud(&["aud1"])),
+            common::JWT_RSA1_OK,
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
 
-        let response = make_proteced_request(JwtAuthorizer::from_jwks("../config/public1.jwks"), common::JWT_EC1_OK).await;
+        let response = make_proteced_request(
+            JwtAuthorizer::from_jwks("../config/public1.jwks").validation(Validation::new().aud(&["aud1"])),
+            common::JWT_EC1_OK,
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
 
-        let response = make_proteced_request(JwtAuthorizer::from_jwks("../config/public1.jwks"), common::JWT_ED1_OK).await;
+        let response = make_proteced_request(
+            JwtAuthorizer::from_jwks("../config/public1.jwks").validation(Validation::new().aud(&["aud1"])),
+            common::JWT_ED1_OK,
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"hello: b@b.com");
 
         // JWKS TEXT
         let response = make_proteced_request(
-            JwtAuthorizer::from_jwks_text(include_str!("../../config/public1.jwks")),
+            JwtAuthorizer::from_jwks_text(include_str!("../../config/public1.jwks"))
+                .validation(Validation::new().aud(&["aud1"])),
             common::JWT_ED1_OK,
         )
         .await;
@@ -227,7 +243,8 @@ mod tests {
     #[tokio::test]
     async fn validate_signature() {
         let response = make_proteced_request(
-            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").validation(Validation::new().disable_validation()),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .validation(Validation::new().aud(&["aud1"]).disable_validation()),
             common::JWT_EC2_OK,
         )
         .await;
@@ -251,7 +268,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
         let response = make_proteced_request(
-            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new()),
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().aud(&["aud1"])),
             common::JWT_EC1_OK,
         )
         .await;
@@ -259,7 +276,7 @@ mod tests {
 
         let response = make_proteced_request(
             JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
-                .validation(Validation::new().iss(&["http://localhost:3001"])),
+                .validation(Validation::new().iss(&["http://localhost:3001"]).aud(&["aud1"])),
             common::JWT_EC1_OK,
         )
         .await;
@@ -276,7 +293,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
         let response = make_proteced_request(
-            JwtAuthorizer::from_ed_pem("../config/ed25519-public1.pem").validation(Validation::new()),
+            JwtAuthorizer::from_ed_pem("../config/ed25519-public1.pem").validation(Validation::new().aud(&["aud1"])),
             common::JWT_ED1_OK,
         )
         .await;
@@ -316,7 +333,7 @@ mod tests {
         .await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         let response = make_proteced_request(
-            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().exp(true)),
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().exp(true).aud(&["aud1"])),
             common::JWT_EC1_OK,
         )
         .await;
@@ -350,7 +367,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
         let response = make_proteced_request(
-            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().nbf(true)),
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().nbf(true).aud(&["aud1"])),
             common::JWT_EC1_OK,
         )
         .await;
@@ -364,7 +381,9 @@ mod tests {
     async fn jwt_source_cookie() {
         // OK
         let response = proteced_request_with_header(
-            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").jwt_source(JwtSource::Cookie("ccc".to_owned())),
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .validation(Validation::new().aud(&["aud1"]))
+                .jwt_source(JwtSource::Cookie("ccc".to_owned())),
             header::COOKIE.as_str(),
             &format!("ccc={}", common::JWT_RSA1_OK),
         )
@@ -403,10 +422,12 @@ mod tests {
         // 1) Vec
         let auths: Vec<Authorizer<User>> = vec![
             JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
+                .validation(Validation::new().aud(&["aud1"]))
                 .build()
                 .await
                 .unwrap(),
             JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .validation(Validation::new().aud(&["aud1"]))
                 .jwt_source(JwtSource::Cookie("ccc".to_owned()))
                 .build()
                 .await
@@ -448,12 +469,14 @@ mod tests {
         // 3) Arc
         let auth1 = Arc::new(
             JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
+                .validation(Validation::new().aud(&["aud1"]))
                 .build()
                 .await
                 .unwrap(),
         );
         let auth2 = Arc::new(
             JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .validation(Validation::new().aud(&["aud1"]))
                 .jwt_source(JwtSource::Cookie("ccc".to_owned()))
                 .build()
                 .await
