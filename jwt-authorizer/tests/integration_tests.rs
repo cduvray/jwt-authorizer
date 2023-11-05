@@ -11,7 +11,7 @@ use std::{
 use axum::{response::Response, routing::get, Json, Router};
 use http::{header::AUTHORIZATION, Request, StatusCode};
 use hyper::Body;
-use jwt_authorizer::{IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy};
+use jwt_authorizer::{IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy, Validation};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -104,7 +104,14 @@ async fn app(jwt_auth: JwtAuthorizer<User>) -> Router {
     let protected_route: Router = Router::new()
         .route("/protected", get(protected_handler))
         .route("/protected-with-user", get(protected_with_user))
-        .layer(jwt_auth.build().await.unwrap().into_layer());
+        .layer(
+            jwt_auth
+                .validation(Validation::new().aud(&["aud1"]))
+                .build()
+                .await
+                .unwrap()
+                .into_layer(),
+        );
 
     Router::new().merge(pub_route).merge(protected_route)
 }
