@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// The number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time ignoring leap seconds.
 /// (https://www.rfc-editor.org/rfc/rfc7519#section-2)
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
-pub struct NumericDate(i64);
+pub struct NumericDate(pub i64);
 
 /// accesses the underlying value
 impl From<NumericDate> for i64 {
@@ -170,7 +170,6 @@ mod tests {
                 }"#;
 
         let claims: RegisteredClaims = serde_json::from_str(claims_str).expect("Failed RfcClaims deserialisation");
-        // assert_eq!(claims.iss.unwrap(), "http://localhost:3001");
 
         let jwt_serd = serde_json::to_string(&claims).unwrap();
         let mut trimed_claims = claims_str.to_owned();
