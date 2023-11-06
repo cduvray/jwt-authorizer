@@ -9,6 +9,8 @@ use crate::{
     Authorizer, Refresh, RefreshStrategy, RegisteredClaims, Validation,
 };
 
+use reqwest::Client;
+
 /// Authorizer Layer builder
 ///
 /// - initialisation of the Authorizer from jwks, rsa, ed, ec or secret
@@ -22,6 +24,7 @@ where
     claims_checker: Option<ClaimsCheckerFn<C>>,
     validation: Option<Validation>,
     jwt_source: JwtSource,
+    http_client: Option<Client>,
 }
 
 /// alias for AuthorizerBuidler (backwards compatibility)
@@ -40,6 +43,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -51,6 +55,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -61,6 +66,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -71,6 +77,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -82,6 +89,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -93,6 +101,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -104,6 +113,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -115,6 +125,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -126,6 +137,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -137,6 +149,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -148,6 +161,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            http_client: None,
         }
     }
 
@@ -198,12 +212,30 @@ where
         self
     }
 
+    /// provide a custom http client for oicd requests
+    /// if not called, uses a default configured client
+    ///
+    /// (default: None)
+    pub fn http_client(mut self, http_client: Client) -> AuthorizerBuilder<C> {
+        self.http_client = Some(http_client);
+
+        self
+    }
+
     /// Build axum layer
     #[deprecated(since = "0.10.0", note = "please use `IntoLayer::into_layer()` instead")]
     pub async fn layer(self) -> Result<AuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
         let auth = Arc::new(
-            Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await?,
+            Authorizer::build(
+                self.key_source_type,
+                self.claims_checker,
+                self.refresh,
+                val,
+                self.jwt_source,
+                None,
+            )
+            .await?,
         );
         Ok(AuthorizationLayer::new(vec![auth]))
     }
@@ -211,6 +243,6 @@ where
     pub async fn build(self) -> Result<Authorizer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
 
-        Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source).await
+        Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source, self.http_client).await
     }
 }

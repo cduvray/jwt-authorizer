@@ -20,8 +20,10 @@ fn discovery_url(issuer: &str) -> Result<Url, InitError> {
     Ok(url)
 }
 
-pub async fn discover_jwks(issuer: &str) -> Result<String, InitError> {
-    Client::new()
+pub async fn discover_jwks(issuer: &str, client: Option<Client>) -> Result<String, InitError> {
+    let client = client.unwrap_or_default();
+
+    client
         .get(discovery_url(issuer)?)
         .send()
         .await
