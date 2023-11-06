@@ -3,7 +3,7 @@ use std::{sync::Once, task::Poll};
 use axum::body::HttpBody;
 use futures_core::future::BoxFuture;
 use http::header::AUTHORIZATION;
-use jwt_authorizer::{layer::AuthorizationService, IntoLayer, JwtAuthorizer};
+use jwt_authorizer::{layer::AuthorizationService, IntoLayer, JwtAuthorizer, Validation};
 use serde::{Deserialize, Serialize};
 use tonic::{server::UnaryService, transport::NamedService, IntoRequest, Status};
 use tower::{buffer::Buffer, Service};
@@ -181,7 +181,8 @@ where
 #[tokio::test]
 async fn successfull_auth() {
     init_test();
-    let auth: JwtAuthorizer<User> = JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem");
+    let auth: JwtAuthorizer<User> =
+        JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").validation(Validation::new().aud(&["aud1"]));
     let app = app(auth, "b@b.com".to_string()).await;
     let r = make_protected_request(app.clone(), Some(JWT_RSA1_OK), "world").await.unwrap();
     assert_eq!(r.get_ref().message, "Hello, world");
