@@ -269,8 +269,8 @@ mod tests {
     #[tokio::test]
     async fn validate_aud() {
         let response = make_proteced_request(
-            JwtAuthorizer::from_ed_pem("../config/ed25519-public1.pem").validation(Validation::new().aud(&["bad-aud"])),
-            common::JWT_ED1_OK,
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").validation(Validation::new().aud(&["bad-aud"])),
+            common::JWT_RSA1_AUD1_OK,
         )
         .await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -283,8 +283,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let response = make_proteced_request(
-            JwtAuthorizer::from_ed_pem("../config/ed25519-public1.pem").validation(Validation::new().aud(&["aud1"])),
-            common::JWT_ED1_OK,
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().aud(&["aud1"])),
+            common::JWT_EC1_AUD1_OK,
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
