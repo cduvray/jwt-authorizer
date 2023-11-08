@@ -4,6 +4,7 @@ use josekit::jwk::{
     Jwk,
 };
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use jwt_authorizer::{NumericDate, OneOrArray, RegisteredClaims};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{net::SocketAddr, thread, time::Duration};
@@ -101,7 +102,6 @@ fn build_header(alg: Algorithm, kid: &str) -> Header {
 struct Claims {
     iss: &'static str,
     sub: &'static str,
-    aud: &'static str,
     exp: usize,
     nbf: usize,
 }
@@ -111,9 +111,18 @@ pub async fn tokens() -> Json<Value> {
     let claims = Claims {
         iss: ISSUER_URI,
         sub: "b@b.com",
-        aud: "aud1",
         exp: 2000000000, // May 2033
         nbf: 1516239022, // Jan 2018
+    };
+
+    let claims_with_aud = RegisteredClaims {
+        iss: Some(ISSUER_URI.to_owned()),
+        sub: Some("b@b.com".to_owned()),
+        aud: Some(OneOrArray::Array(vec!["aud1".to_owned(), "aud2".to_owned()])),
+        exp: Some(NumericDate(2000000000)), // May 2033
+        nbf: Some(NumericDate(1516239022)), // Jan 2018
+        iat: None,
+        jti: None,
     };
 
     let rsa1_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/rsa-private1.pem")).unwrap();
@@ -124,7 +133,9 @@ pub async fn tokens() -> Json<Value> {
     let ed2_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private2.pem")).unwrap();
 
     let rsa1_token = encode(&build_header(Algorithm::RS256, "rsa01"), &claims, &rsa1_key).unwrap();
+    let rsa1_token_aud = encode(&build_header(Algorithm::RS256, "rsa01"), &claims_with_aud, &rsa1_key).unwrap();
     let rsa2_token = encode(&build_header(Algorithm::RS256, "rsa02"), &claims, &rsa2_key).unwrap();
+    let ec1_token_aud = encode(&build_header(Algorithm::ES256, "ec01"), &claims_with_aud, &ec1_key).unwrap();
     let ec1_token = encode(&build_header(Algorithm::ES256, "ec01"), &claims, &ec1_key).unwrap();
     let ec2_token = encode(&build_header(Algorithm::ES256, "ec02"), &claims, &ec2_key).unwrap();
     let ed1_token = encode(&build_header(Algorithm::EdDSA, "ed01"), &claims, &ed1_key).unwrap();
@@ -132,8 +143,10 @@ pub async fn tokens() -> Json<Value> {
 
     Json(json!({
         "rsa01": rsa1_token,
+        "rsa01_aud": rsa1_token_aud,
         "rsa02": rsa2_token,
         "ec01": ec1_token,
+        "ec01_aud": ec1_token_aud,
         "ec02": ec2_token,
         "ed01": ed1_token,
         "ed02": ed2_token,
