@@ -243,6 +243,14 @@ where
     pub async fn build(self) -> Result<Authorizer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
 
-        Authorizer::build(self.key_source_type, self.claims_checker, self.refresh, val, self.jwt_source, self.http_client).await
+        Authorizer::build(
+            self.key_source_type,
+            self.claims_checker,
+            self.refresh,
+            val,
+            self.jwt_source,
+            self.http_client,
+        )
+        .await
     }
 }
