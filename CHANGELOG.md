@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- jsonwebtoken updated (8.3.0 -> 9.1.0)
+- make RegisteredClaims serializable (fixes #38)
+
 ## 0.12.0 (2023-10-14)
 
 - internal refactoring (no public breaking changes)
