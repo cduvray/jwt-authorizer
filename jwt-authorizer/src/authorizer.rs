@@ -3,7 +3,7 @@ use std::{io::Read, sync::Arc};
 use headers::{authorization::Bearer, Authorization, HeaderMapExt};
 use http::HeaderMap;
 use jsonwebtoken::{decode, decode_header, jwk::JwkSet, Algorithm, DecodingKey, TokenData};
-use reqwest::Url;
+use reqwest::{Client, Url};
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -56,6 +56,7 @@ where
         refresh: Option<Refresh>,
         validation: crate::validation::Validation,
         jwt_source: JwtSource,
+        http_client: Option<Client>,
     ) -> Result<Authorizer<C>, InitError> {
         Ok(match key_source_type {
             KeySourceType::RSA(path) => {
@@ -195,7 +196,7 @@ where
                 }
             }
             KeySourceType::Discovery(issuer_url) => {
-                let jwks_url = Url::parse(&oidc::discover_jwks(issuer_url.as_str()).await?)
+                let jwks_url = Url::parse(&oidc::discover_jwks(issuer_url.as_str(), http_client).await?)
                     .map_err(|e| InitError::JwksUrlError(e.to_string()))?;
 
                 let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default());
@@ -318,6 +319,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -343,6 +345,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -358,6 +361,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -370,6 +374,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -382,6 +387,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -394,6 +400,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -419,6 +426,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -431,6 +439,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -443,6 +452,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await
         .unwrap();
@@ -458,6 +468,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await;
         println!("{:?}", a.as_ref().err());
@@ -472,6 +483,7 @@ mod tests {
             None,
             Validation::default(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await;
         println!("{:?}", a.as_ref().err());
@@ -486,6 +498,7 @@ mod tests {
             None,
             Validation::default(),
             JwtSource::AuthorizationHeader,
+            None,
         )
         .await;
         println!("{:?}", a.as_ref().err());
