@@ -64,7 +64,14 @@ where
                 Authorizer {
                     key_source: KeySource::SingleKeySource(Arc::new(KeyData {
                         kid: None,
-                        alg: vec![Algorithm::RS256, Algorithm::RS384, Algorithm::RS512],
+                        algs: vec![
+                            Algorithm::RS256,
+                            Algorithm::RS384,
+                            Algorithm::RS512,
+                            Algorithm::PS256,
+                            Algorithm::PS384,
+                            Algorithm::PS512,
+                        ],
                         key,
                     })),
                     claims_checker,
@@ -77,7 +84,14 @@ where
                 Authorizer {
                     key_source: KeySource::SingleKeySource(Arc::new(KeyData {
                         kid: None,
-                        alg: vec![Algorithm::RS256, Algorithm::RS384, Algorithm::RS512],
+                        algs: vec![
+                            Algorithm::RS256,
+                            Algorithm::RS384,
+                            Algorithm::RS512,
+                            Algorithm::PS256,
+                            Algorithm::PS384,
+                            Algorithm::PS512,
+                        ],
                         key,
                     })),
                     claims_checker,
@@ -90,7 +104,7 @@ where
                 Authorizer {
                     key_source: KeySource::SingleKeySource(Arc::new(KeyData {
                         kid: None,
-                        alg: vec![Algorithm::ES256, Algorithm::ES384],
+                        algs: vec![Algorithm::ES256, Algorithm::ES384],
                         key,
                     })),
                     claims_checker,
@@ -103,7 +117,7 @@ where
                 Authorizer {
                     key_source: KeySource::SingleKeySource(Arc::new(KeyData {
                         kid: None,
-                        alg: vec![Algorithm::ES256, Algorithm::ES384],
+                        algs: vec![Algorithm::ES256, Algorithm::ES384],
                         key,
                     })),
                     claims_checker,
@@ -116,7 +130,7 @@ where
                 Authorizer {
                     key_source: KeySource::SingleKeySource(Arc::new(KeyData {
                         kid: None,
-                        alg: vec![Algorithm::EdDSA],
+                        algs: vec![Algorithm::EdDSA],
                         key,
                     })),
                     claims_checker,
@@ -129,7 +143,7 @@ where
                 Authorizer {
                     key_source: KeySource::SingleKeySource(Arc::new(KeyData {
                         kid: None,
-                        alg: vec![Algorithm::EdDSA],
+                        algs: vec![Algorithm::EdDSA],
                         key,
                     })),
                     claims_checker,
@@ -142,7 +156,7 @@ where
                 Authorizer {
                     key_source: KeySource::SingleKeySource(Arc::new(KeyData {
                         kid: None,
-                        alg: vec![Algorithm::HS256, Algorithm::HS384, Algorithm::HS512],
+                        algs: vec![Algorithm::HS256, Algorithm::HS384, Algorithm::HS512],
                         key,
                     })),
                     claims_checker,
@@ -214,7 +228,7 @@ where
         let header = decode_header(token)?;
         // TODO: (optimisation) build & store jwt_validation in key data, to avoid rebuilding it for each check
         let val_key = self.key_source.get_key(header).await?;
-        let jwt_validation = &self.validation.to_jwt_validation(val_key.alg.clone());
+        let jwt_validation = &self.validation.to_jwt_validation(val_key.algs.clone());
         let token_data = decode::<C>(token, &val_key.key, jwt_validation)?;
 
         if let Some(ref checker) = self.claims_checker {
