@@ -228,7 +228,7 @@ where
         let header = decode_header(token)?;
         // TODO: (optimisation) build & store jwt_validation in key data, to avoid rebuilding it for each check
         let val_key = self.key_source.get_key(header).await?;
-        let jwt_validation = &self.validation.to_jwt_validation(val_key.algs.clone());
+        let jwt_validation = &self.validation.to_jwt_validation(&val_key.algs);
         let token_data = decode::<C>(token, &val_key.key, jwt_validation)?;
 
         if let Some(ref checker) = self.claims_checker {

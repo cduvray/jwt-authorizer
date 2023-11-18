@@ -30,6 +30,11 @@ pub struct Validation {
     ///
     /// Defaults to true.
     pub validate_signature: bool,
+
+    /// Accepted algorithms
+    ///
+    /// If empty anly the algorithms matching key will be authorized
+    pub algs: Vec<Algorithm>,
 }
 
 impl Validation {
@@ -82,7 +87,17 @@ impl Validation {
         self
     }
 
-    pub(crate) fn to_jwt_validation(&self, alg: Vec<Algorithm>) -> jsonwebtoken::Validation {
+    /// Authorized algorithms.
+    ///
+    /// If no algs are supplied default algs for the key will be used
+    /// (example for a EC key, algs = [ES256, ES384]).
+    pub fn algs(mut self, algs: Vec<Algorithm>) -> Self {
+        self.algs = algs;
+
+        self
+    }
+
+    pub(crate) fn to_jwt_validation(&self, default_algs: &Vec<Algorithm>) -> jsonwebtoken::Validation {
         let required_claims = if self.validate_exp {
             let mut claims = HashSet::with_capacity(1);
             claims.insert("exp".to_owned());
@@ -103,7 +118,11 @@ impl Validation {
         jwt_validation.iss = iss;
         jwt_validation.aud = aud;
         jwt_validation.sub = None;
-        jwt_validation.algorithms = alg;
+        jwt_validation.algorithms = if self.algs.is_empty() {
+            default_algs.clone()
+        } else {
+            self.algs.clone()
+        };
         if !self.validate_signature {
             jwt_validation.insecure_disable_signature_validation();
         }
@@ -124,6 +143,7 @@ impl Default for Validation {
             aud: None,
 
             validate_signature: true,
+            algs: vec![],
         }
     }
 }

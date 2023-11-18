@@ -12,6 +12,7 @@ mod tests {
         BoxError, Router,
     };
     use http::{header, HeaderValue};
+    use jsonwebtoken::Algorithm;
     use jwt_authorizer::{
         authorizer::Authorizer,
         layer::{AuthorizationLayer, JwtSource},
@@ -369,6 +370,27 @@ mod tests {
         let response = make_proteced_request(
             JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().nbf(true).aud(&["aud1"])),
             common::JWT_EC1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn validate_algs() {
+        // OK
+        let response = make_proteced_request(
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .validation(Validation::new().algs(vec![Algorithm::RS256, Algorithm::RS384])),
+            common::JWT_RSA1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // NOK - Invalid Alg
+        let response = make_proteced_request(
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .validation(Validation::new().algs(vec![Algorithm::RS512])),
+            common::JWT_RSA1_OK,
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
