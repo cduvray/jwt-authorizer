@@ -50,17 +50,24 @@ async fn jwks() -> Json<Value> {
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ecdsa-private1.pem"), Some(EcCurve::P256)).unwrap();
+    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ec256-private1.pem"), Some(EcCurve::P256)).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("ec01");
     pk.set_algorithm("ES256");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
-    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ecdsa-private2.pem"), Some(EcCurve::P256)).unwrap();
+    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ec256-private2.pem"), Some(EcCurve::P256)).unwrap();
     let mut pk = keypair.to_jwk_public_key();
     pk.set_key_id("ec02");
     pk.set_algorithm("ES256");
+    pk.set_key_use("sig");
+    kset.keys.push(pk);
+
+    let keypair = EcKeyPair::from_pem(include_bytes!("../../../config/ec384-private1.pem"), Some(EcCurve::P384)).unwrap();
+    let mut pk = keypair.to_jwk_public_key();
+    pk.set_key_id("ec01-es384");
+    pk.set_algorithm("ES384");
     pk.set_key_use("sig");
     kset.keys.push(pk);
 
@@ -127,8 +134,9 @@ pub async fn tokens() -> Json<Value> {
 
     let rsa1_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/rsa-private1.pem")).unwrap();
     let rsa2_key = EncodingKey::from_rsa_pem(include_bytes!("../../../config/rsa-private2.pem")).unwrap();
-    let ec1_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ecdsa-private1.pem")).unwrap();
-    let ec2_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ecdsa-private2.pem")).unwrap();
+    let ec1_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ec256-private1.pem")).unwrap();
+    let ec2_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ec256-private2.pem")).unwrap();
+    let ec1_es384_key = EncodingKey::from_ec_pem(include_bytes!("../../../config/ec384-private1.pem")).unwrap();
     let ed1_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private1.pem")).unwrap();
     let ed2_key = EncodingKey::from_ed_pem(include_bytes!("../../../config/ed25519-private2.pem")).unwrap();
 
@@ -138,6 +146,7 @@ pub async fn tokens() -> Json<Value> {
     let ec1_token_aud = encode(&build_header(Algorithm::ES256, "ec01"), &claims_with_aud, &ec1_key).unwrap();
     let ec1_token = encode(&build_header(Algorithm::ES256, "ec01"), &claims, &ec1_key).unwrap();
     let ec2_token = encode(&build_header(Algorithm::ES256, "ec02"), &claims, &ec2_key).unwrap();
+    let ec1_es384_token = encode(&build_header(Algorithm::ES384, "ec01-es384"), &claims, &ec1_es384_key).unwrap();
     let ed1_token = encode(&build_header(Algorithm::EdDSA, "ed01"), &claims, &ed1_key).unwrap();
     let ed2_token = encode(&build_header(Algorithm::EdDSA, "ed02"), &claims, &ed2_key).unwrap();
 
@@ -148,6 +157,7 @@ pub async fn tokens() -> Json<Value> {
         "ec01": ec1_token,
         "ec01_aud": ec1_token_aud,
         "ec02": ec2_token,
+        "ec01_es384": ec1_es384_token,
         "ed01": ed1_token,
         "ed02": ed2_token,
     }))

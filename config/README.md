@@ -9,9 +9,11 @@
 
 curve name: prime256v1 (secp256r1, secp384r1)
 
-> openssl ecparam -genkey -noout -name prime256v1 | openssl pkcs8 -topk8 -nocrypt -out ec-private.pem
+> openssl ecparam -genkey -noout -name prime256v1 | openssl pkcs8 -topk8 -nocrypt -out ec-private1.pem
+> openssl ecparam -genkey -noout -name secp384r1 | openssl pkcs8 -topk8 -nocrypt -out ec384-private1.pem
 
-> openssl ec -in ec-private.pem -pubout -out ec-public-key.pem
+> openssl ec -in ec-private1.pem -pubout -out ec-public1.pem
+> openssl ec -in ec384-private1.pem -pubout -out ec384-public1.pem
 
 ## EdDSA - Edwards-curve Digital Signature Algorithm
 
