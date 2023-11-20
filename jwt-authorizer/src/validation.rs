@@ -97,7 +97,7 @@ impl Validation {
         self
     }
 
-    pub(crate) fn to_jwt_validation(&self, default_algs: &Vec<Algorithm>) -> jsonwebtoken::Validation {
+    pub(crate) fn to_jwt_validation(&self, default_algs: &[Algorithm]) -> jsonwebtoken::Validation {
         let required_claims = if self.validate_exp {
             let mut claims = HashSet::with_capacity(1);
             claims.insert("exp".to_owned());
@@ -119,7 +119,7 @@ impl Validation {
         jwt_validation.aud = aud;
         jwt_validation.sub = None;
         jwt_validation.algorithms = if self.algs.is_empty() {
-            default_algs.clone()
+            default_algs.to_owned()
         } else {
             self.algs.clone()
         };
