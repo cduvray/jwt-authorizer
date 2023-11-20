@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.13.0 (2023-11-20)
+
+- added support for custom http client in jwks discovery (fixes #41)
+- `algs` added to configurable validation options
+- missing alg in JWK no longer defaults to RS256 but to all algs of the same alg familly
 - jsonwebtoken updated (8.3.0 -> 9.1.0)
 - make RegisteredClaims serializable (fixes #38)
 
