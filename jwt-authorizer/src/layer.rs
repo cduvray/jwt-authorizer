@@ -1,5 +1,4 @@
-use axum::body::Body;
-use axum::http::Request;
+use axum::extract::Request;
 use futures_core::ready;
 use futures_util::future::{self, BoxFuture};
 use jsonwebtoken::TokenData;
@@ -17,28 +16,25 @@ use crate::authorizer::Authorizer;
 use crate::AuthError;
 
 /// Trait for authorizing requests.
-pub trait Authorize<B> {
-    type RequestBody;
-    type Future: Future<Output = Result<Request<Self::RequestBody>, AuthError>>;
+pub trait Authorize {
+    type Future: Future<Output = Result<Request, AuthError>>;
 
     /// Authorize the request.
     ///
     /// If the future resolves to `Ok(request)` then the request is allowed through, otherwise not.
-    fn authorize(&self, request: Request<B>) -> Self::Future;
+    fn authorize(&self, request: Request) -> Self::Future;
 }
 
-impl<B, S, C> Authorize<B> for AuthorizationService<S, C>
+impl<S, C> Authorize for AuthorizationService<S, C>
 where
-    B: Send + 'static,
-    C: Clone + DeserializeOwned + Send + 'static,
+    C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
-    type RequestBody = B;
-    type Future = BoxFuture<'static, Result<Request<B>, AuthError>>;
+    type Future = BoxFuture<'static, Result<Request, AuthError>>;
 
     /// The authorizers are sequentially applied (check_auth) until one of them validates the token.
     /// If no authorizer validates the token the request is rejected.
     ///
-    fn authorize(&self, mut request: Request<B>) -> Self::Future {
+    fn authorize(&self, mut request: Request) -> Self::Future {
         let tkns_auths: Vec<(String, Arc<Authorizer<C>>)> = self
             .auths
             .iter()
@@ -160,9 +156,9 @@ where
     }
 }
 
-impl<S, C> Service<Request<Body>> for AuthorizationService<S, C>
+impl<S, C> Service<Request> for AuthorizationService<S, C>
 where
-    S: Service<Request<Body>> + Clone,
+    S: Service<Request> + Clone,
     S::Response: From<AuthError>,
     C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
@@ -174,7 +170,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
+    fn call(&mut self, req: Request) -> Self::Future {
         let inner = self.inner.clone();
         // take the service that was ready
         let inner = std::mem::replace(&mut self.inner, inner);
@@ -192,11 +188,11 @@ where
 /// Response future for [`AuthorizationService`].
 pub struct ResponseFuture<S, C>
 where
-    S: Service<Request<Body>>,
+    S: Service<Request>,
     C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
     #[pin]
-    state: State<<AuthorizationService<S, C> as Authorize<Body>>::Future, S::Future>,
+    state: State<<AuthorizationService<S, C> as Authorize>::Future, S::Future>,
     service: S,
 }
 
@@ -214,7 +210,7 @@ enum State<A, SFut> {
 
 impl<S, C> Future for ResponseFuture<S, C>
 where
-    S: Service<Request<Body>>,
+    S: Service<Request>,
     S::Response: From<AuthError>,
     C: Clone + DeserializeOwned + Send + Sync,
 {
