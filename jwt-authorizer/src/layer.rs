@@ -187,36 +187,6 @@ where
         }
     }
 }
-/*
-impl<ReqBody, S, C> Service<Request<ReqBody>> for AuthorizationService<S, C>
-where
-    ReqBody: Send + Sync + 'static,
-    S: Service<Request<ReqBody>> + Clone,
-    S::Response: From<AuthError>,
-    C: Clone + DeserializeOwned + Send + Sync + 'static,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = ResponseFuture<S, ReqBody, C>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
-        let inner = self.inner.clone();
-        // take the service that was ready
-        let inner = std::mem::replace(&mut self.inner, inner);
-
-        let auth_fut = self.authorize(req);
-
-        ResponseFuture {
-            state: State::Authorize { auth_fut },
-            service: inner,
-        }
-    }
-}
-*/
 
 #[pin_project]
 /// Response future for [`AuthorizationService`].
