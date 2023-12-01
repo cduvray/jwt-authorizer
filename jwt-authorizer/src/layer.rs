@@ -1,3 +1,4 @@
+use axum::body::Body;
 use axum::http::Request;
 use futures_core::ready;
 use futures_util::future::{self, BoxFuture};
@@ -8,6 +9,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use tokio::sync::Mutex;
 use tower_layer::Layer;
 use tower_service::Service;
 
@@ -27,8 +29,8 @@ pub trait Authorize<B> {
 
 impl<B, S, C> Authorize<B> for AuthorizationService<S, C>
 where
-    B: Send + Sync + 'static,
-    C: Clone + DeserializeOwned + Send + Sync + 'static,
+    B: Send + 'static,
+    C: Clone + DeserializeOwned + Send + 'static,
 {
     type RequestBody = B;
     type Future = BoxFuture<'static, Result<Request<B>, AuthError>>;
@@ -59,7 +61,9 @@ where
                 Ok(tdata) => {
                     // Set `token_data` as a request extension so it can be accessed by other
                     // services down the stack.
-                    request.extensions_mut().insert(tdata);
+
+                    let something = Arc::new(Mutex::new(tdata));
+                    request.extensions_mut().insert(something);
 
                     Ok(request)
                 }
@@ -119,7 +123,7 @@ pub enum JwtSource {
 #[derive(Clone)]
 pub struct AuthorizationService<S, C>
 where
-    C: Clone + DeserializeOwned + Send + Sync,
+    C: Clone + DeserializeOwned + Send,
 {
     pub inner: S,
     pub auths: Vec<Arc<Authorizer<C>>>,
@@ -127,7 +131,7 @@ where
 
 impl<S, C> AuthorizationService<S, C>
 where
-    C: Clone + DeserializeOwned + Send + Sync,
+    C: Clone + DeserializeOwned + Send,
 {
     pub fn get_ref(&self) -> &S {
         &self.inner
@@ -156,6 +160,34 @@ where
     }
 }
 
+impl<S, C> Service<Request<Body>> for AuthorizationService<S, C>
+where
+    S: Service<Request<Body>> + Clone,
+    S::Response: From<AuthError>,
+    C: Clone + DeserializeOwned + Send + Sync + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = ResponseFuture<S, C>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        let inner = self.inner.clone();
+        // take the service that was ready
+        let inner = std::mem::replace(&mut self.inner, inner);
+
+        let auth_fut = self.authorize(req);
+
+        ResponseFuture {
+            state: State::Authorize { auth_fut },
+            service: inner,
+        }
+    }
+}
+/*
 impl<ReqBody, S, C> Service<Request<ReqBody>> for AuthorizationService<S, C>
 where
     ReqBody: Send + Sync + 'static,
@@ -184,17 +216,17 @@ where
         }
     }
 }
+*/
 
 #[pin_project]
 /// Response future for [`AuthorizationService`].
-pub struct ResponseFuture<S, ReqBody, C>
+pub struct ResponseFuture<S, C>
 where
-    S: Service<Request<ReqBody>>,
-    ReqBody: Send + Sync + 'static,
+    S: Service<Request<Body>>,
     C: Clone + DeserializeOwned + Send + Sync + 'static,
 {
     #[pin]
-    state: State<<AuthorizationService<S, C> as Authorize<ReqBody>>::Future, S::Future>,
+    state: State<<AuthorizationService<S, C> as Authorize<Body>>::Future, S::Future>,
     service: S,
 }
 
@@ -210,11 +242,10 @@ enum State<A, SFut> {
     },
 }
 
-impl<S, ReqBody, C> Future for ResponseFuture<S, ReqBody, C>
+impl<S, C> Future for ResponseFuture<S, C>
 where
-    S: Service<Request<ReqBody>>,
+    S: Service<Request<Body>>,
     S::Response: From<AuthError>,
-    ReqBody: Send + Sync + 'static,
     C: Clone + DeserializeOwned + Send + Sync,
 {
     type Output = Result<S::Response, S::Error>;

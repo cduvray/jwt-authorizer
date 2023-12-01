@@ -8,9 +8,9 @@ use std::{
     time::Duration,
 };
 
+use axum::body::Body;
 use axum::{response::Response, routing::get, Json, Router};
 use http::{header::AUTHORIZATION, Request, StatusCode};
-use hyper::Body;
 use jwt_authorizer::{IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy, Validation};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -127,7 +127,7 @@ fn init_test() {
 }
 
 async fn make_proteced_request(app: &mut Router, bearer: &str) -> Response {
-    app.ready()
+    <Router as tower::ServiceExt<Request<Body>>>::ready(app)
         .await
         .unwrap()
         .call(
@@ -142,7 +142,7 @@ async fn make_proteced_request(app: &mut Router, bearer: &str) -> Response {
 }
 
 async fn make_public_request(app: &mut Router) -> Response {
-    app.ready()
+    <Router as tower::ServiceExt<Request<Body>>>::ready(app)
         .await
         .unwrap()
         .call(Request::builder().uri("/public").body(Body::empty()).unwrap())
