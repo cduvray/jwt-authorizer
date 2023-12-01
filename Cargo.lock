@@ -1076,6 +1076,7 @@ dependencies = [
  "futures-util",
  "headers",
  "http 1.0.0",
+ "http-body-util",
  "hyper 1.0.1",
  "jsonwebtoken",
  "lazy_static",

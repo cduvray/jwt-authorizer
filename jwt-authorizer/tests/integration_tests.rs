@@ -77,11 +77,8 @@ fn run_jwks_server() -> String {
         .route("/jwks", get(jwks));
 
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener)
-            .unwrap()
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        let listener: tokio::net::TcpListener = tokio::net::TcpListener::from_std(listener).unwrap();
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     url
