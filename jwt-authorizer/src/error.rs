@@ -1,5 +1,5 @@
 use axum::{
-    body::{self, BoxBody, Empty},
+    body::Body,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -64,8 +64,8 @@ pub enum AuthError {
     NoAuthorizerLayer(),
 }
 
-fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
-    let mut res = Response::new(body::boxed(Empty::new()));
+fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<Body> {
+    let mut res = Response::new(Body::empty());
     *res.status_mut() = status;
     let h = if bearer.is_empty() {
         "Bearer".to_owned()
@@ -77,8 +77,8 @@ fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
     res
 }
 
-fn response_500() -> Response<BoxBody> {
-    let mut res = Response::new(body::boxed(Empty::new()));
+fn response_500() -> Response<Body> {
+    let mut res = Response::new(Body::empty());
     *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
 
     res
