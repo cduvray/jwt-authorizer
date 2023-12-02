@@ -24,7 +24,7 @@ JWT authoriser Layer for Axum and Tonic.
 # use jwt_authorizer::{AuthError, Authorizer, JwtAuthorizer, JwtClaims, RegisteredClaims, IntoLayer};
 # use axum::{routing::get, Router};
 # use serde::Deserialize;
-
+# use tokio::net::TcpListener;
 # async {
 
     // let's create an authorizer builder from a JWKS Endpoint
@@ -41,9 +41,8 @@ JWT authoriser Layer for Axum and Tonic.
         // Send the protected data to the user
         Ok(format!("Welcome: {:?}", user.sub))
     }
-
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
-        .serve(app.into_make_service()).await.expect("server failed");
+    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app.into_make_service()).await.expect("server failed");
 # };
 ```
 

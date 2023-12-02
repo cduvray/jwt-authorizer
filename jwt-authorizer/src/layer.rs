@@ -58,8 +58,7 @@ where
                     // Set `token_data` as a request extension so it can be accessed by other
                     // services down the stack.
 
-                    let something = Arc::new(Mutex::new(tdata));
-                    request.extensions_mut().insert(something);
+                    request.extensions_mut().insert(tdata);
 
                     Ok(request)
                 }
