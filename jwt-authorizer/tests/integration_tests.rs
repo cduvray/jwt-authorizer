@@ -154,10 +154,10 @@ async fn make_public_request(app: &mut Router) -> Response {
 #[tokio::test]
 async fn sequential_tests() {
     // these tests must be executed sequentially
-    //scenario1().await;
-    //scenario2().await;
-    //scenario3().await;
-    //scenario4().await;
+    scenario1().await;
+    scenario2().await;
+    scenario3().await;
+    scenario4().await;
 }
 
 async fn scenario1() {
