@@ -66,6 +66,7 @@ async fn jwks() -> Json<Value> {
 
 fn run_jwks_server() -> String {
     let listener = TcpListener::bind("0.0.0.0:0".parse::<SocketAddr>().unwrap()).unwrap();
+    listener.set_nonblocking(true).unwrap();
     let addr = listener.local_addr().unwrap();
     let url = format!("http://{}:{}", addr.ip(), addr.port());
 
