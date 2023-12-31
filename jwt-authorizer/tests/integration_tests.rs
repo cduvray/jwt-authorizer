@@ -1,5 +1,5 @@
 use std::{
-    net::{SocketAddr, TcpListener},
+    net::SocketAddr,
     sync::{
         atomic::{AtomicI16, Ordering},
         Arc, Once,
@@ -14,6 +14,7 @@ use jwt_authorizer::{IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrate
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::net::TcpListener;
 use tower::Service;
 use tower::ServiceExt;
 
@@ -64,9 +65,8 @@ async fn jwks() -> Json<Value> {
     Json(common::JWKS_RSA1.clone())
 }
 
-fn run_jwks_server() -> String {
-    let listener = TcpListener::bind("0.0.0.0:0".parse::<SocketAddr>().unwrap()).unwrap();
-    listener.set_nonblocking(true).unwrap();
+async fn run_jwks_server() -> String {
+    let listener = TcpListener::bind("0.0.0.0:0".parse::<SocketAddr>().unwrap()).await.unwrap();
     let addr = listener.local_addr().unwrap();
     let url = format!("http://{}:{}", addr.ip(), addr.port());
 
@@ -77,7 +77,6 @@ fn run_jwks_server() -> String {
         .route("/jwks", get(jwks));
 
     tokio::spawn(async move {
-        let listener: tokio::net::TcpListener = tokio::net::TcpListener::from_std(listener).unwrap();
         axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
@@ -163,7 +162,7 @@ async fn sequential_tests() {
 
 async fn scenario1() {
     init_test();
-    let url = run_jwks_server();
+    let url = run_jwks_server().await;
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url);
     let mut app = app(auth).await;
     assert_eq!(1, Stats::discovery_counter());
@@ -191,7 +190,7 @@ async fn scenario1() {
 ///  Refresh strategy: INTERVAL
 async fn scenario2() {
     init_test();
-    let url = run_jwks_server();
+    let url = run_jwks_server().await;
     let refresh = Refresh {
         refresh_interval: Duration::from_millis(40),
         retry_interval: Duration::from_millis(0),
@@ -220,7 +219,7 @@ async fn scenario2() {
 ///  Refresh strategy: KeyNotFound
 async fn scenario3() {
     init_test();
-    let url = run_jwks_server();
+    let url = run_jwks_server().await;
     let refresh = Refresh {
         strategy: RefreshStrategy::KeyNotFound,
         refresh_interval: Duration::from_millis(40),
@@ -251,7 +250,7 @@ async fn scenario3() {
 ///  Refresh strategy: NoRefresh
 async fn scenario4() {
     init_test();
-    let url = run_jwks_server();
+    let url = run_jwks_server().await;
     let refresh = Refresh {
         strategy: RefreshStrategy::NoRefresh,
         refresh_interval: Duration::from_millis(0),
