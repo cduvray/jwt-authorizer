@@ -1,5 +1,5 @@
 use axum::{
-    body::{self, BoxBody, Empty},
+    body::Body,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -64,8 +64,8 @@ pub enum AuthError {
     NoAuthorizerLayer(),
 }
 
-fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
-    let mut res = Response::new(body::boxed(Empty::new()));
+fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<Body> {
+    let mut res = Response::new(Body::empty());
     *res.status_mut() = status;
     let h = if bearer.is_empty() {
         "Bearer".to_owned()
@@ -77,60 +77,11 @@ fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<BoxBody> {
     res
 }
 
-fn response_500() -> Response<BoxBody> {
-    let mut res = Response::new(body::boxed(Empty::new()));
+fn response_500() -> Response<Body> {
+    let mut res = Response::new(Body::empty());
     *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
 
     res
-}
-
-#[cfg(feature = "tonic")]
-impl From<AuthError> for Response<tonic::body::BoxBody> {
-    fn from(e: AuthError) -> Self {
-        match e {
-            AuthError::JwksRefreshError(err) => {
-                tracing::error!("AuthErrors::JwksRefreshError: {}", err);
-                tonic::Status::internal("")
-            }
-            AuthError::InvalidKey(err) => {
-                tracing::error!("AuthErrors::InvalidKey: {}", err);
-                tonic::Status::internal("")
-            }
-            AuthError::JwksSerialisationError(err) => {
-                tracing::error!("AuthErrors::JwksSerialisationError: {}", err);
-                tonic::Status::internal("")
-            }
-            AuthError::InvalidKeyAlg(err) => {
-                debug!("AuthErrors::InvalidKeyAlg: {:?}", err);
-                tonic::Status::unauthenticated("error=\"invalid_token\", error_description=\"invalid key algorithm\"")
-            }
-            AuthError::InvalidKid(err) => {
-                debug!("AuthErrors::InvalidKid: {}", err);
-                tonic::Status::unauthenticated("error=\"invalid_token\", error_description=\"invalid kid\"")
-            }
-            AuthError::InvalidToken(err) => {
-                debug!("AuthErrors::InvalidToken: {}", err);
-                tonic::Status::unauthenticated("error=\"invalid_token\"")
-            }
-            AuthError::MissingToken() => {
-                debug!("AuthErrors::MissingToken");
-                tonic::Status::unauthenticated("")
-            }
-            AuthError::InvalidClaims() => {
-                debug!("AuthErrors::InvalidClaims");
-                tonic::Status::unauthenticated("error=\"insufficient_scope\"")
-            }
-            AuthError::NoAuthorizer() => {
-                debug!("AuthErrors::NoAuthorizer");
-                tonic::Status::unauthenticated("error=\"invalid_token\"")
-            }
-            AuthError::NoAuthorizerLayer() => {
-                debug!("AuthErrors::NoAuthorizerLayer");
-                tonic::Status::unauthenticated("error=\"no_authorizer_layer\"")
-            }
-        }
-        .to_http()
-    }
 }
 
 impl From<AuthError> for Response {

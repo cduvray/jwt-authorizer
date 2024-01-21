@@ -23,6 +23,7 @@ mod tests {
     use tower::{util::MapErrLayer, ServiceExt};
 
     use crate::common;
+    use http_body_util::BodyExt;
 
     #[derive(Debug, Deserialize, Clone)]
     struct User {
@@ -102,7 +103,9 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+
         assert_eq!(&body[..], b"hello: b@b.com");
 
         // ECDSA PEM
@@ -112,14 +115,14 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"hello: b@b.com");
 
         // RSA PEM
         let response =
             make_proteced_request(JwtAuthorizer::from_rsa_pem("../config/rsa-public2.pem"), common::JWT_RSA2_OK).await;
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"hello: b@b.com");
 
         // JWKS
@@ -129,7 +132,7 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"hello: b@b.com");
 
         let response = make_proteced_request(
@@ -138,7 +141,7 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"hello: b@b.com");
 
         let response = make_proteced_request(
@@ -147,7 +150,7 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"hello: b@b.com");
 
         // JWKS TEXT
@@ -158,7 +161,7 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"hello: b@b.com");
     }
 
@@ -234,7 +237,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&body[..], b"option: true");
     }
 

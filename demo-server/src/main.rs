@@ -3,7 +3,7 @@ use jwt_authorizer::{
     error::InitError, AuthError, Authorizer, IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy,
 };
 use serde::Deserialize;
-use std::net::SocketAddr;
+use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -62,10 +62,10 @@ async fn main() -> Result<(), InitError> {
         .nest("/api", api)
         .layer(TraceLayer::new_for_http());
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    tracing::info!("listening on {}", addr);
+    let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    tracing::info!("listening on {:?}", listener.local_addr());
 
-    axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
+    axum::serve(listener, app.into_make_service()).await.unwrap();
 
     Ok(())
 }

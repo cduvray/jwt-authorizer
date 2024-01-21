@@ -6,6 +6,8 @@ JWT authorizer Layer for Axum.
 [![Crates.io](https://img.shields.io/crates/v/jwt-authorizer)](https://crates.io/crates/jwt-authorizer)
 [![Documentation](https://docs.rs/jwt-authorizer/badge.svg)](https://docs.rs/jwt-authorizer)
 
+> **Tonic support is temporarily removed** (waiting upgrade to hyper 1 and axum 0.7 hyperium/tonic/#1584)
+
 ## Features
 
 - JWT token verification (Bearer)
@@ -19,7 +21,7 @@ JWT authorizer Layer for Axum.
     - into custom deserializable structs or into `RegisteredClaims` (default)
 - Claims checker
 - Tracing support (error logging)
-- *tonic* support
+- ~~*tonic* support~~
 
 ## Usage
 

@@ -1,5 +1,5 @@
 use std::{
-    net::{SocketAddr, TcpListener},
+    net::SocketAddr,
     sync::{
         atomic::{AtomicI16, Ordering},
         Arc, Once,
@@ -8,13 +8,13 @@ use std::{
     time::Duration,
 };
 
-use axum::{response::Response, routing::get, Json, Router};
+use axum::{body::Body, response::Response, routing::get, Json, Router};
 use http::{header::AUTHORIZATION, Request, StatusCode};
-use hyper::Body;
 use jwt_authorizer::{IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy, Validation};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::net::TcpListener;
 use tower::Service;
 use tower::ServiceExt;
 
@@ -65,8 +65,8 @@ async fn jwks() -> Json<Value> {
     Json(common::JWKS_RSA1.clone())
 }
 
-fn run_jwks_server() -> String {
-    let listener = TcpListener::bind("0.0.0.0:0".parse::<SocketAddr>().unwrap()).unwrap();
+async fn run_jwks_server() -> String {
+    let listener = TcpListener::bind("0.0.0.0:0".parse::<SocketAddr>().unwrap()).await.unwrap();
     let addr = listener.local_addr().unwrap();
     let url = format!("http://{}:{}", addr.ip(), addr.port());
 
@@ -77,11 +77,7 @@ fn run_jwks_server() -> String {
         .route("/jwks", get(jwks));
 
     tokio::spawn(async move {
-        axum::Server::from_tcp(listener)
-            .unwrap()
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     url
@@ -130,7 +126,8 @@ fn init_test() {
 }
 
 async fn make_proteced_request(app: &mut Router, bearer: &str) -> Response {
-    app.ready()
+    app.as_service()
+        .ready()
         .await
         .unwrap()
         .call(
@@ -145,7 +142,8 @@ async fn make_proteced_request(app: &mut Router, bearer: &str) -> Response {
 }
 
 async fn make_public_request(app: &mut Router) -> Response {
-    app.ready()
+    app.as_service()
+        .ready()
         .await
         .unwrap()
         .call(Request::builder().uri("/public").body(Body::empty()).unwrap())
@@ -164,7 +162,7 @@ async fn sequential_tests() {
 
 async fn scenario1() {
     init_test();
-    let url = run_jwks_server();
+    let url = run_jwks_server().await;
     let auth: JwtAuthorizer<User> = JwtAuthorizer::from_oidc(&url);
     let mut app = app(auth).await;
     assert_eq!(1, Stats::discovery_counter());
@@ -192,7 +190,7 @@ async fn scenario1() {
 ///  Refresh strategy: INTERVAL
 async fn scenario2() {
     init_test();
-    let url = run_jwks_server();
+    let url = run_jwks_server().await;
     let refresh = Refresh {
         refresh_interval: Duration::from_millis(40),
         retry_interval: Duration::from_millis(0),
@@ -221,7 +219,7 @@ async fn scenario2() {
 ///  Refresh strategy: KeyNotFound
 async fn scenario3() {
     init_test();
-    let url = run_jwks_server();
+    let url = run_jwks_server().await;
     let refresh = Refresh {
         strategy: RefreshStrategy::KeyNotFound,
         refresh_interval: Duration::from_millis(40),
@@ -252,7 +250,7 @@ async fn scenario3() {
 ///  Refresh strategy: NoRefresh
 async fn scenario4() {
     init_test();
-    let url = run_jwks_server();
+    let url = run_jwks_server().await;
     let refresh = Refresh {
         strategy: RefreshStrategy::NoRefresh,
         refresh_interval: Duration::from_millis(0),

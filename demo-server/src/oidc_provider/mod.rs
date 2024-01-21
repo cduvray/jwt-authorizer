@@ -7,7 +7,8 @@ use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use jwt_authorizer::{NumericDate, OneOrArray, RegisteredClaims};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{net::SocketAddr, thread, time::Duration};
+use std::{thread, time::Duration};
+use tokio::net::TcpListener;
 
 const ISSUER_URI: &str = "http://localhost:3001";
 
@@ -171,9 +172,9 @@ pub fn run_server() -> &'static str {
         .route("/tokens", get(tokens));
 
     tokio::spawn(async move {
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
-        tracing::info!("oidc provider starting on: {}", addr);
-        axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
+        let listener = TcpListener::bind("127.0.0.1:3001").await.unwrap();
+        tracing::info!("oidc provider starting on: {:?}", listener.local_addr());
+        axum::serve(listener, app.into_make_service()).await.unwrap();
     });
 
     thread::sleep(Duration::from_millis(200)); // waiting oidc to start

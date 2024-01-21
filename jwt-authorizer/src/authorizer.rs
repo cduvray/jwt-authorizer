@@ -48,7 +48,7 @@ pub enum KeySourceType {
 
 impl<C> Authorizer<C>
 where
-    C: DeserializeOwned + Clone + Send + Sync,
+    C: DeserializeOwned + Clone + Send,
 {
     pub(crate) async fn build(
         key_source_type: KeySourceType,
