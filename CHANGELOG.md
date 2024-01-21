@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.14.0 (2024-01-22)
+
+- update to axum 0.7
+  - tower-http 0.5, header 0.4, http 1.0
+- jsonwebtoken 9.2
+- tonic support removed temporarily (waiting for tonic migration to axum 0.7)
+
 ## 0.13.0 (2023-11-20)
 
 - added support for custom http client in jwks discovery (fixes #41)
