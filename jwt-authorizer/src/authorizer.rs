@@ -201,7 +201,7 @@ where
             }
             KeySourceType::Jwks(url) => {
                 let jwks_url = Url::parse(url.as_str()).map_err(|e| InitError::JwksUrlError(e.to_string()))?;
-                let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default());
+                let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default(), http_client);
                 Authorizer {
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
@@ -210,10 +210,10 @@ where
                 }
             }
             KeySourceType::Discovery(issuer_url) => {
-                let jwks_url = Url::parse(&oidc::discover_jwks(issuer_url.as_str(), http_client).await?)
+                let jwks_url = Url::parse(&oidc::discover_jwks(issuer_url.as_str(), http_client.clone()).await?)
                     .map_err(|e| InitError::JwksUrlError(e.to_string()))?;
 
-                let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default());
+                let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default(), http_client);
                 Authorizer {
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
