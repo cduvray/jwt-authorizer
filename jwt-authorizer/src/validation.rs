@@ -17,6 +17,10 @@ pub struct Validation {
     ///
     /// Defaults to `false`.
     pub validate_nbf: bool,
+    /// Whether to validate the `aud` field.
+    ///
+    /// Defaults to `true`.
+    pub validate_aud: bool,
     /// If it contains a value, the validation will check that the `aud` claim value is in the values provided.
     ///
     /// Defaults to `None`.
@@ -46,6 +50,14 @@ impl Validation {
     /// check that the `iss` claim is a member of the values provided
     pub fn iss<T: ToString>(mut self, items: &[T]) -> Self {
         self.iss = Some(items.iter().map(|x| x.to_string()).collect());
+
+        self
+    }
+
+    /// enables or disables aud validation
+    /// Very insecure to turn that off, only do it if you know what you're doing.
+    pub fn validate_aud(mut self, val: bool) -> Self {
+        self.validate_aud = val;
 
         self
     }
@@ -115,6 +127,7 @@ impl Validation {
         jwt_validation.leeway = self.leeway;
         jwt_validation.validate_exp = self.validate_exp;
         jwt_validation.validate_nbf = self.validate_nbf;
+        jwt_validation.validate_aud = self.validate_aud;
         jwt_validation.iss = iss;
         jwt_validation.aud = aud;
         jwt_validation.sub = None;
@@ -138,6 +151,7 @@ impl Default for Validation {
 
             validate_exp: true,
             validate_nbf: false,
+            validate_aud: true,
 
             iss: None,
             aud: None,
