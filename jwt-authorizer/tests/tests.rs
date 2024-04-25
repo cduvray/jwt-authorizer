@@ -551,9 +551,7 @@ mod tests {
     async fn jwt_custom_token_extractor() {
         // Initialize custom token extractor
         let token_extractor: TokenExtractorFn = Arc::new(Box::new(|headers| {
-            let Some(custom_header) = headers.get("X-Custom-Authorization") else {
-                return None;
-            };
+            let custom_header = headers.get("X-Custom-Authorization")?;
 
             let Ok(custom_header_str) = custom_header.to_str() else {
                 return None;
@@ -561,10 +559,7 @@ mod tests {
 
             let token = custom_header_str.split("Bearer ");
 
-            match token.last() {
-                Some(t) => Some(t.to_string()),
-                None => None,
-            }
+            token.last().map(|t| t.to_string())
         }));
 
         // OK
