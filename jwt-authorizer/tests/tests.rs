@@ -14,7 +14,7 @@ mod tests {
     use http::{header, HeaderValue};
     use jsonwebtoken::Algorithm;
     use jwt_authorizer::{
-        authorizer::Authorizer,
+        authorizer::{Authorizer, TokenExtractorFn},
         layer::{AuthorizationLayer, JwtSource},
         validation::Validation,
         IntoLayer, JwtAuthorizer, JwtClaims,
@@ -542,5 +542,66 @@ mod tests {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // --------------------
+    //      token_extractor
+    // ---------------------
+    #[tokio::test]
+    async fn jwt_custom_token_extractor() {
+        // Initialize custom token extractor
+        let token_extractor: TokenExtractorFn = Arc::new(Box::new(|headers| {
+            let Some(custom_header) = headers.get("X-Custom-Authorization") else {
+                return None;
+            };
+
+            let Ok(custom_header_str) = custom_header.to_str() else {
+                return None;
+            };
+
+            let token = custom_header_str.split("Bearer ");
+
+            match token.last() {
+                Some(t) => Some(t.to_string()),
+                None => None,
+            }
+        }));
+
+        // OK
+        let response = proteced_request_with_header(
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem")
+                .validation(Validation::new().aud(&["aud1"]))
+                .token_extractor(token_extractor.clone()),
+            "X-Custom-Authorization",
+            &format!("Bearer {}", common::JWT_RSA1_OK),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Header missing
+        let response = proteced_request_with_header(
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").token_extractor(token_extractor.clone()),
+            "X-Custom-Authorization",
+            "",
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers().get(header::WWW_AUTHENTICATE).unwrap(),
+            &"Bearer error=\"invalid_token\""
+        );
+
+        // Invalid Token
+        let response = proteced_request_with_header(
+            JwtAuthorizer::from_rsa_pem("../config/rsa-public1.pem").token_extractor(token_extractor.clone()),
+            "X-Custom-Authorization",
+            &format!("Bearer {}", common::JWT_EC2_OK),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers().get(header::WWW_AUTHENTICATE).unwrap(),
+            &"Bearer error=\"invalid_token\""
+        );
     }
 }
