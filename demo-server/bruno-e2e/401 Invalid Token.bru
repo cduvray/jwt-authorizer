@@ -1,0 +1,20 @@
+meta {
+  name: 401 Invalid Token
+  type: http
+  seq: 6
+}
+
+get {
+  url: http://localhost:3000/api/protected
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: blablabla.xxxx.xxxx
+}
+
+assert {
+  res.status: eq 401
+  res.headers['www-authenticate']: eq Bearer error="invalid_token"
+}
