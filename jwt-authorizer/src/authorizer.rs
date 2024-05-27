@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub type ClaimsCheckerFn<C> = Arc<Box<dyn Fn(&C) -> bool + Send + Sync>>;
+pub type TokenExtractorFn = Arc<Box<dyn Fn(&HeaderMap) -> Option<String> + Send + Sync>>;
 
 pub struct Authorizer<C = RegisteredClaims>
 where
@@ -23,6 +24,7 @@ where
     pub claims_checker: Option<ClaimsCheckerFn<C>>,
     pub validation: crate::validation::Validation,
     pub jwt_source: JwtSource,
+    pub token_extractor: Option<TokenExtractorFn>,
 }
 
 fn read_data(path: &str) -> Result<Vec<u8>, InitError> {
@@ -56,6 +58,7 @@ where
         refresh: Option<Refresh>,
         validation: crate::validation::Validation,
         jwt_source: JwtSource,
+        token_extractor: Option<TokenExtractorFn>,
         http_client: Option<Client>,
     ) -> Result<Authorizer<C>, InitError> {
         Ok(match key_source_type {
@@ -77,6 +80,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::RSAString(text) => {
@@ -97,6 +101,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::EC(path) => {
@@ -110,6 +115,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::ECString(text) => {
@@ -123,6 +129,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::ED(path) => {
@@ -136,6 +143,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::EDString(text) => {
@@ -149,6 +157,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::Secret(secret) => {
@@ -162,6 +171,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::JwksPath(path) => {
@@ -179,6 +189,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::JwksString(jwks_str) => {
@@ -197,6 +208,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::Jwks(url) => {
@@ -207,6 +219,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
             KeySourceType::Discovery(issuer_url) => {
@@ -219,6 +232,7 @@ where
                     claims_checker,
                     validation,
                     jwt_source,
+                    token_extractor,
                 }
             }
         })
@@ -241,14 +255,18 @@ where
     }
 
     pub fn extract_token(&self, h: &HeaderMap) -> Option<String> {
-        match &self.jwt_source {
-            layer::JwtSource::AuthorizationHeader => {
-                let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
-                bearer_o.map(|b| String::from(b.0.token()))
+        if let Some(ref extractor) = self.token_extractor {
+            extractor(h)
+        } else {
+            match &self.jwt_source {
+                layer::JwtSource::AuthorizationHeader => {
+                    let bearer_o: Option<Authorization<Bearer>> = h.typed_get();
+                    bearer_o.map(|b| String::from(b.0.token()))
+                }
+                layer::JwtSource::Cookie(name) => h
+                    .typed_get::<headers::Cookie>()
+                    .and_then(|c| c.get(name.as_str()).map(String::from)),
             }
-            layer::JwtSource::Cookie(name) => h
-                .typed_get::<headers::Cookie>()
-                .and_then(|c| c.get(name.as_str()).map(String::from)),
         }
     }
 }
@@ -334,6 +352,7 @@ mod tests {
             Validation::new(),
             JwtSource::AuthorizationHeader,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -360,6 +379,7 @@ mod tests {
             Validation::new(),
             JwtSource::AuthorizationHeader,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -376,6 +396,7 @@ mod tests {
             Validation::new(),
             JwtSource::AuthorizationHeader,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -388,6 +409,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
             None,
         )
         .await
@@ -402,6 +424,7 @@ mod tests {
             Validation::new(),
             JwtSource::AuthorizationHeader,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -414,6 +437,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
             None,
         )
         .await
@@ -441,6 +465,7 @@ mod tests {
             Validation::new(),
             JwtSource::AuthorizationHeader,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -454,6 +479,7 @@ mod tests {
             Validation::new(),
             JwtSource::AuthorizationHeader,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -466,6 +492,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
+            None,
             None,
         )
         .await
@@ -483,6 +510,7 @@ mod tests {
             Validation::new(),
             JwtSource::AuthorizationHeader,
             None,
+            None,
         )
         .await;
         println!("{:?}", a.as_ref().err());
@@ -498,6 +526,7 @@ mod tests {
             Validation::default(),
             JwtSource::AuthorizationHeader,
             None,
+            None,
         )
         .await;
         println!("{:?}", a.as_ref().err());
@@ -512,6 +541,7 @@ mod tests {
             None,
             Validation::default(),
             JwtSource::AuthorizationHeader,
+            None,
             None,
         )
         .await;
