@@ -1,5 +1,5 @@
 use axum::{
-    body::Body,
+    body::{Body, Bytes},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -36,7 +36,7 @@ pub enum AuthError {
     JwksSerialisationError(#[from] serde_json::Error),
 
     #[error("JwksRefreshError {0}")]
-    JwksRefreshError(String),
+    JwksRefreshError(RefreshError),
 
     #[error("InvalidKey {0}")]
     InvalidKey(String),
@@ -62,6 +62,16 @@ pub enum AuthError {
     /// Used when a claim extractor is used and no authorization layer is in front the handler
     #[error("No Authorizer Layer")]
     NoAuthorizerLayer(),
+}
+
+#[derive(Debug, Error)]
+pub enum RefreshError {
+    #[error("during connection: {0}")]
+    Connection(reqwest::Error),
+    #[error("during decoding: {error}. body: {body:?}")]
+    Decode { error: serde_json::Error, body: Bytes },
+    #[error("no valid keys in the jwk set")]
+    NoValidKeys,
 }
 
 fn response_wwwauth(status: StatusCode, bearer: &str) -> Response<Body> {
