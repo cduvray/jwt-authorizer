@@ -56,7 +56,7 @@ where
         refresh: Option<Refresh>,
         validation: crate::validation::Validation,
         jwt_source: JwtSource,
-        http_client: Option<Client>,
+        http_client: Client,
     ) -> Result<Authorizer<C>, InitError> {
         Ok(match key_source_type {
             KeySourceType::RSA(path) => {
@@ -201,7 +201,7 @@ where
             }
             KeySourceType::Jwks(url) => {
                 let jwks_url = Url::parse(url.as_str()).map_err(|e| InitError::JwksUrlError(e.to_string()))?;
-                let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default());
+                let key_store_manager = KeyStoreManager::new(http_client, jwks_url, refresh.unwrap_or_default());
                 Authorizer {
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
@@ -210,10 +210,10 @@ where
                 }
             }
             KeySourceType::Discovery(issuer_url) => {
-                let jwks_url = Url::parse(&oidc::discover_jwks(issuer_url.as_str(), http_client).await?)
+                let jwks_url = Url::parse(&oidc::discover_jwks(issuer_url.as_str(), &http_client).await?)
                     .map_err(|e| InitError::JwksUrlError(e.to_string()))?;
 
-                let key_store_manager = KeyStoreManager::new(jwks_url, refresh.unwrap_or_default());
+                let key_store_manager = KeyStoreManager::new(http_client, jwks_url, refresh.unwrap_or_default());
                 Authorizer {
                     key_source: KeySource::KeyStoreSource(key_store_manager),
                     claims_checker,
@@ -318,6 +318,7 @@ where
 mod tests {
 
     use jsonwebtoken::{Algorithm, Header};
+    use reqwest::Client;
     use serde_json::Value;
 
     use crate::{layer::JwtSource, validation::Validation};
@@ -333,7 +334,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -359,7 +360,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -375,7 +376,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -388,7 +389,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -401,7 +402,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -414,7 +415,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -440,7 +441,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -453,7 +454,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -466,7 +467,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await
         .unwrap();
@@ -482,7 +483,7 @@ mod tests {
             None,
             Validation::new(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await;
         println!("{:?}", a.as_ref().err());
@@ -497,7 +498,7 @@ mod tests {
             None,
             Validation::default(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await;
         println!("{:?}", a.as_ref().err());
@@ -512,7 +513,7 @@ mod tests {
             None,
             Validation::default(),
             JwtSource::AuthorizationHeader,
-            None,
+            Client::default(),
         )
         .await;
         println!("{:?}", a.as_ref().err());

@@ -233,7 +233,7 @@ where
                 self.refresh,
                 val,
                 self.jwt_source,
-                None,
+                self.http_client.unwrap_or_default(),
             )
             .await?,
         );
@@ -249,7 +249,7 @@ where
             self.refresh,
             val,
             self.jwt_source,
-            self.http_client,
+            self.http_client.unwrap_or_default(),
         )
         .await
     }
