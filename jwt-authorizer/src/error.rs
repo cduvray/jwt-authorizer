@@ -129,7 +129,7 @@ impl From<AuthError> for Response<tonic::body::BoxBody> {
                 tonic::Status::unauthenticated("error=\"no_authorizer_layer\"")
             }
         }
-        .to_http()
+        .into_http()
     }
 }
 

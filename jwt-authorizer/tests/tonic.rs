@@ -1,11 +1,11 @@
 use std::{sync::Once, task::Poll};
 
-use axum::body::HttpBody;
+use axum::extract::Request;
 use futures_core::future::BoxFuture;
 use http::header::AUTHORIZATION;
 use jwt_authorizer::{layer::AuthorizationService, IntoLayer, JwtAuthorizer, Validation};
 use serde::{Deserialize, Serialize};
-use tonic::{server::UnaryService, transport::NamedService, IntoRequest, Status};
+use tonic::{server::NamedService, server::UnaryService, IntoRequest, Status};
 use tower::{buffer::Buffer, Service};
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -50,7 +50,7 @@ struct GreeterServer {
     expected_sub: String,
 }
 
-impl Service<http::Request<tonic::transport::Body>> for GreeterServer {
+impl Service<http::Request<tonic::body::BoxBody>> for GreeterServer {
     type Response = http::Response<tonic::body::BoxBody>;
     type Error = std::convert::Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -59,7 +59,7 @@ impl Service<http::Request<tonic::transport::Body>> for GreeterServer {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: http::Request<tonic::transport::Body>) -> Self::Future {
+    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
         let token = req.extensions().get::<jsonwebtoken::TokenData<User>>().unwrap();
         assert_eq!(token.claims.sub, self.expected_sub);
         match req.uri().path() {
@@ -69,7 +69,7 @@ impl Service<http::Request<tonic::transport::Body>> for GreeterServer {
             }),
             p => {
                 let p = p.to_string();
-                Box::pin(async move { Ok(Status::unimplemented(p).to_http()) })
+                Box::pin(async move { Ok(Status::unimplemented(p).into_http()) })
             }
         }
     }
@@ -82,7 +82,7 @@ impl NamedService for GreeterServer {
 async fn app(
     jwt_auth: JwtAuthorizer<User>,
     expected_sub: String,
-) -> AuthorizationService<Buffer<tonic::transport::server::Routes, http::Request<tonic::transport::Body>>, User> {
+) -> AuthorizationService<Buffer<tonic::service::Routes, Request<tonic::body::BoxBody>>, User> {
     let layer = jwt_auth.build().await.unwrap().into_layer();
     tonic::transport::Server::builder()
         .layer(layer)
@@ -102,62 +102,22 @@ fn init_test() {
     });
 }
 
-// The grpc client produces a http request with a tonic boxbody that the transport is meant to sent out, while the server side
-// expects to receive a http request with a hyper body.. This simple wrapper converts from one to
-// the other.
-struct GrpcWrapper<S>
-where
-    S: Service<http::Request<axum::body::Body>> + Clone,
-{
-    inner: S,
-}
-
-impl<S> Service<http::Request<tonic::body::BoxBody>> for GrpcWrapper<S>
-where
-    S: Service<http::Request<axum::body::Body>> + Clone + Send + 'static,
-    S::Future: Send,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
-        let inner = self.inner.clone();
-        // take the service that was ready
-        let mut inner = std::mem::replace(&mut self.inner, inner);
-        Box::pin(async move {
-            let (parts, mut body) = req.into_parts();
-            let mut data = Vec::new();
-            while let Some(d) = body.data().await {
-                let d = d.unwrap();
-                data.extend_from_slice(&d)
-            }
-            inner
-                .call(http::Request::from_parts(parts, axum::body::Body::from(data)))
-                .await
-        })
-    }
-}
-
-async fn make_protected_request<S: Clone>(
+async fn make_protected_request<S>(
     app: AuthorizationService<S, User>,
     bearer: Option<&str>,
     message: &str,
 ) -> Result<tonic::Response<HelloMessage>, Status>
 where
     S: Service<
-            http::Request<tonic::transport::Body>,
+            http::Request<tonic::body::BoxBody>,
             Response = http::Response<tonic::body::BoxBody>,
             Error = tower::BoxError,
         > + Send
+        + Clone
         + 'static,
     S::Future: Send,
 {
-    let mut grpc = tonic::client::Grpc::new(GrpcWrapper { inner: app });
+    let mut grpc = tonic::client::Grpc::new(app);
 
     let mut request = HelloMessage {
         message: message.to_string(),
