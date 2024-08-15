@@ -222,7 +222,7 @@ where
         self
     }
 
-    /// Build axum layer
+    /// Build layer
     #[deprecated(since = "0.10.0", note = "please use `IntoLayer::into_layer()` instead")]
     pub async fn layer(self) -> Result<AuthorizationLayer<C>, InitError> {
         let val = self.validation.unwrap_or_default();
