@@ -28,16 +28,25 @@ jobs:
           components: clippy
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
+  msrv:
+    name: Minimal rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+            toolchain: "1.73"
+      - name: Build System Info
+        run: cargo build --lib --all-features
+
   tests:
     name: Tests
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [pinned, stable, nightly]
+        build: [stable, nightly]
         include:
-        - build: pinned
-          os: ubuntu-22.04
-          rust: 1.68.0
         - build: stable
           os: ubuntu-22.04
           rust: stable
