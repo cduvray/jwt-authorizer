@@ -27,7 +27,7 @@ See documentation of the [`jwt-authorizer`](./jwt-authorizer/docs/README.md) mod
 
 ## Development
 
-Minimum supported Rust version is 1.65.
+Minimum supported Rust version is 1.75.
 
 ## Contributing
 
