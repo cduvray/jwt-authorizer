@@ -139,7 +139,7 @@ impl From<AuthError> for Response {
     }
 }
 
-/// (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
+/// (<https://datatracker.ietf.org/doc/html/rfc6750#section-3.1>)
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         match self {

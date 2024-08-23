@@ -1,3 +1,5 @@
+//! Demo server - for demo and testing purposes
+
 use axum::{routing::get, Router};
 use jwt_authorizer::{
     error::InitError, AuthError, Authorizer, IntoLayer, JwtAuthorizer, JwtClaims, Refresh, RefreshStrategy,
