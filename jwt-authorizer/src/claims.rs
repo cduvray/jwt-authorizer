@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// The number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time ignoring leap seconds.
-/// (https://www.rfc-editor.org/rfc/rfc7519#section-2)
+/// (<https://www.rfc-editor.org/rfc/rfc7519#section-2>)
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct NumericDate(pub i64);
 
@@ -53,7 +53,7 @@ pub struct StringList(Vec<String>);
 
 /// Claims mentioned in the JWT specifications.
 ///
-/// https://www.rfc-editor.org/rfc/rfc7519#section-4.1
+/// <https://www.rfc-editor.org/rfc/rfc7519#section-4.1>
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct RegisteredClaims {
     #[serde(skip_serializing_if = "Option::is_none")]
