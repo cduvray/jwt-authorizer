@@ -6,7 +6,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use crate::error::AuthError;
+use crate::error::{AuthError, RefreshError};
 
 use super::{KeyData, KeySet};
 
@@ -152,17 +152,18 @@ impl KeyStore {
     }
 
     async fn refresh(&mut self, key_url: &Url, qparam: &[(&str, &str)]) -> Result<(), AuthError> {
-        reqwest::Client::new()
-            .get(key_url.as_ref())
-            .query(qparam)
-            .send()
+        let request = reqwest::Client::new().get(key_url.as_ref()).query(qparam);
+        let response = request.send().await.map_err(|e| {
+            self.fail_time = Some(Instant::now());
+            AuthError::JwksRefreshError(RefreshError::Connection(e))
+        })?;
+
+        let body = response
+            .bytes()
             .await
-            .map_err(|e| {
-                self.fail_time = Some(Instant::now());
-                AuthError::JwksRefreshError(e.to_string())
-            })?
-            .json::<JwkSet>()
-            .await
+            .map_err(|e| AuthError::JwksRefreshError(RefreshError::Connection(e)))?;
+
+        serde_json::from_slice::<JwkSet>(&body)
             .map(|jwks| {
                 self.load_time = Some(Instant::now());
                 // self.jwks = jwks;
@@ -176,7 +177,7 @@ impl KeyStore {
                     };
                 }
                 if keys.is_empty() {
-                    Err(AuthError::JwksRefreshError("No valid keys in the Jwk Set!".to_owned()))
+                    Err(AuthError::JwksRefreshError(RefreshError::NoValidKeys))
                 } else {
                     self.keys = keys.into();
                     self.fail_time = None;
@@ -185,7 +186,7 @@ impl KeyStore {
             })
             .map_err(|e| {
                 self.fail_time = Some(Instant::now());
-                AuthError::JwksRefreshError(e.to_string())
+                AuthError::JwksRefreshError(RefreshError::Decode { error: e, body })
             })?
     }
 
