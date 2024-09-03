@@ -161,6 +161,11 @@ impl KeyStore {
                 self.fail_time = Some(Instant::now());
                 AuthError::JwksRefreshError(e.to_string())
             })?
+            .error_for_status()
+            .map_err(|e| {
+                self.fail_time = Some(Instant::now());
+                AuthError::JwksRefreshError(e.to_string())
+            })?
             .json::<JwkSet>()
             .await
             .map(|jwks| {
