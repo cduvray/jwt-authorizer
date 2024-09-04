@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    authorizer::{ClaimsCheckerFn, KeySourceType},
+    authorizer::{ClaimsCheckerFn, KeySourceType, TokenExtractorFn},
     error::InitError,
     layer::{AuthorizationLayer, JwtSource},
     Authorizer, Refresh, RefreshStrategy, RegisteredClaims, Validation,
@@ -24,6 +24,7 @@ where
     claims_checker: Option<ClaimsCheckerFn<C>>,
     validation: Option<Validation>,
     jwt_source: JwtSource,
+    token_extractor: Option<TokenExtractorFn>,
     http_client: Option<Client>,
 }
 
@@ -43,6 +44,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -55,6 +57,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -66,6 +69,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -77,6 +81,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -89,6 +94,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -101,6 +107,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -113,6 +120,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -125,6 +133,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -137,6 +146,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -149,6 +159,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -161,6 +172,7 @@ where
             claims_checker: None,
             validation: None,
             jwt_source: JwtSource::AuthorizationHeader,
+            token_extractor: None,
             http_client: None,
         }
     }
@@ -212,6 +224,15 @@ where
         self
     }
 
+    /// configures the token extractor function
+    ///
+    /// (default: None)
+    pub fn token_extractor(mut self, token_extractor: TokenExtractorFn) -> AuthorizerBuilder<C> {
+        self.token_extractor = Some(token_extractor);
+
+        self
+    }
+
     /// provide a custom http client for oicd requests
     /// if not called, uses a default configured client
     ///
@@ -233,6 +254,7 @@ where
                 self.refresh,
                 val,
                 self.jwt_source,
+                self.token_extractor,
                 None,
             )
             .await?,
@@ -249,6 +271,7 @@ where
             self.refresh,
             val,
             self.jwt_source,
+            self.token_extractor,
             self.http_client,
         )
         .await
