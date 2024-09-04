@@ -1,0 +1,15 @@
+meta {
+  name: JWKS Endpoint
+  type: http
+  seq: 2
+}
+
+get {
+  url: http://localhost:3001/jwks
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}

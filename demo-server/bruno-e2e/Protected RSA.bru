@@ -1,0 +1,20 @@
+meta {
+  name: Protected RSA
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://localhost:3000/api/protected
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6InJzYTAxIn0.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDEiLCJzdWIiOiJiQGIuY29tIiwiZXhwIjoyMDAwMDAwMDAwLCJuYmYiOjE1MTYyMzkwMjJ9.pmm8Kdk-SvycXIGpWb1R0DuP5nlB7w4QQS7trhN_OjOpbk0A8F_lC4BdClz3rol2Pgo61lcFckJgjNBj34DQGeTGOtvxdiUXNgi1aKiXH4AyPzZeZx30PgFxa1fxhuZhBAj6xIZKBSBQvVyjeVQzAScINRCBX8zfCaXSU1ZCUkJl5vbD7zT-cYIFU76we9HcIYKRXwTiAyoNn3Lixa1H3_t5sbx3om2WlIB2x-sGpoDFDjorcuJT1yQx3grTRTBzHyRBRjZ3e8wrMbiacy-m3WoEFdkssQgYi_dSQH0hvxgacvGWayK0UqD7O5UL6EzTA2feXbgA_68o5gfvSnM8CUsPut5gZr-gwVbQKPbBdCQtl_wXIMot7UNKYEiFV38x5EmUr-ShzQcditW6fciguuY1Qav502UE1UMXvt5p8-kYxw2AaaVd6iTgQBzkBrtvywMYWzIwzGNA70RvUhI2rlgcn8GEU_51Tv_NMHjp6CjDbAxQVKa0PlcRE4pd6yk_IJSR4Nska_8BQZdPbsFn--z_XHEDoRZQ1C1M6m77xVndg3zX0sNQPXfWsttCbBmaHvMKTOp0cH9rlWB9r9nTo9fn8jcfqlak2O2IAzfzsOdVfUrES6T1UWkWobs9usGgqJuIkZHbDd4tmXyPRT4wrU7hxEyE9cuvuZPAi8GYt80
+}
+
+assert {
+  res.status: eq 200
+  res.body: contains b@b.com
+}

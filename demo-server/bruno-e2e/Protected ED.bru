@@ -1,0 +1,20 @@
+meta {
+  name: Protected ED
+  type: http
+  seq: 3
+}
+
+get {
+  url: http://localhost:3000/api/protected
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSIsImtpZCI6ImVkMDEifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDEiLCJzdWIiOiJiQGIuY29tIiwiZXhwIjoyMDAwMDAwMDAwLCJuYmYiOjE1MTYyMzkwMjJ9.5bFOZqc-lBFy4gFifQ_CTx1A3R6Nry71gdi7KH2GGvTZQC_ZI1vNbqGnWQhpR6n_jUd9ICUc0pPI5iLCB6K1Bg
+}
+
+assert {
+  res.status: eq 200
+  res.body: contains b@b.com
+}

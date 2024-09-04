@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "jwt-authorizer E2E",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

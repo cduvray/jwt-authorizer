@@ -84,13 +84,62 @@ fn response_500() -> Response<Body> {
     res
 }
 
+#[cfg(feature = "tonic")]
+impl From<AuthError> for Response<tonic::body::BoxBody> {
+    fn from(e: AuthError) -> Self {
+        match e {
+            AuthError::JwksRefreshError(err) => {
+                tracing::error!("AuthErrors::JwksRefreshError: {}", err);
+                tonic::Status::internal("")
+            }
+            AuthError::InvalidKey(err) => {
+                tracing::error!("AuthErrors::InvalidKey: {}", err);
+                tonic::Status::internal("")
+            }
+            AuthError::JwksSerialisationError(err) => {
+                tracing::error!("AuthErrors::JwksSerialisationError: {}", err);
+                tonic::Status::internal("")
+            }
+            AuthError::InvalidKeyAlg(err) => {
+                debug!("AuthErrors::InvalidKeyAlg: {:?}", err);
+                tonic::Status::unauthenticated("error=\"invalid_token\", error_description=\"invalid key algorithm\"")
+            }
+            AuthError::InvalidKid(err) => {
+                debug!("AuthErrors::InvalidKid: {}", err);
+                tonic::Status::unauthenticated("error=\"invalid_token\", error_description=\"invalid kid\"")
+            }
+            AuthError::InvalidToken(err) => {
+                debug!("AuthErrors::InvalidToken: {}", err);
+                tonic::Status::unauthenticated("error=\"invalid_token\"")
+            }
+            AuthError::MissingToken() => {
+                debug!("AuthErrors::MissingToken");
+                tonic::Status::unauthenticated("")
+            }
+            AuthError::InvalidClaims() => {
+                debug!("AuthErrors::InvalidClaims");
+                tonic::Status::unauthenticated("error=\"insufficient_scope\"")
+            }
+            AuthError::NoAuthorizer() => {
+                debug!("AuthErrors::NoAuthorizer");
+                tonic::Status::unauthenticated("error=\"invalid_token\"")
+            }
+            AuthError::NoAuthorizerLayer() => {
+                debug!("AuthErrors::NoAuthorizerLayer");
+                tonic::Status::unauthenticated("error=\"no_authorizer_layer\"")
+            }
+        }
+        .into_http()
+    }
+}
+
 impl From<AuthError> for Response {
     fn from(e: AuthError) -> Self {
         e.into_response()
     }
 }
 
-/// (https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)
+/// (<https://datatracker.ietf.org/doc/html/rfc6750#section-3.1>)
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         match self {

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.15.0 (2024-08-26)
+
+- tonic support is back
+- CI refactoring
+  - MSRV is bumped to 75
+- minor dependencies updates (commit: d87b7ef90912759b0ad608bfcb7b021bb9c14e14)
+
 ## 0.14.0 (2024-01-22)
 
 - update to axum 0.7

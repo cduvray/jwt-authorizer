@@ -1,4 +1,6 @@
 name: ci
+env:
+  MSRV: '1.75'
 on:
   push:
     branches:
@@ -6,59 +8,59 @@ on:
   pull_request:
 
 jobs:
-  style:
-    name: Format
+  check:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+    - uses: actions/checkout@v4
+    - uses: taiki-e/install-action@protoc
+    - uses: dtolnay/rust-toolchain@beta
       with:
-        components: rustfmt
-    - name: Check format
-      run: cargo fmt --check
-
-  clippy:
-    name: Clippy
+        components: clippy, rustfmt
+    - uses: Swatinem/rust-cache@v2
+    - name: clippy
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+    - name: rustfmt
+      run: cargo fmt --all --check
+  check-docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - run: cargo clippy --all-targets --all-features -- -D warnings
-
-  tests:
-    name: Tests
-    runs-on: ${{ matrix.os }}
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+    - name: cargo doc
+      env:
+        RUSTDOCFLAGS: "-D rustdoc::all -A rustdoc::private-doc-tests"
+      run: cargo doc --all-features --no-deps
+  test-versions:
+    needs: check
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        build: [pinned, stable, nightly]
-        include:
-        - build: pinned
-          os: ubuntu-22.04
-          rust: 1.68.0
-        - build: stable
-          os: ubuntu-22.04
-          rust: stable
-        - build: nightly
-          os: ubuntu-22.04
-          rust: nightly
+        rust: [stable, beta, nightly]
     steps:
-    - uses: actions/checkout@v3
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
-
+    - uses: Swatinem/rust-cache@v2
     - name: Build System Info
       run: rustc --version
-
     - name: Run tests default features
       run: cargo test
-
-    - name: Run tests all features
-      run: cargo test --all-features
-
     - name: Run tests no features
       run: cargo test --no-default-features
+    - name: Run tests all features
+      run: cargo test --all-features
+  test-msrv:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.MSRV }}
+    - name: "install Rust nightly"
+      uses: dtolnay/rust-toolchain@nightly
+    - uses: Swatinem/rust-cache@v2
+    - name: Run tests all features
+      run: cargo test --all-features
