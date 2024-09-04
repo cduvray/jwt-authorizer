@@ -115,6 +115,7 @@ impl Validation {
         jwt_validation.leeway = self.leeway;
         jwt_validation.validate_exp = self.validate_exp;
         jwt_validation.validate_nbf = self.validate_nbf;
+        jwt_validation.validate_aud = self.aud.is_some();
         jwt_validation.iss = iss;
         jwt_validation.aud = aud;
         jwt_validation.sub = None;
