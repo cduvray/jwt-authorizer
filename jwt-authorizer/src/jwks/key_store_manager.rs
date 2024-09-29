@@ -1,5 +1,5 @@
 use jsonwebtoken::{jwk::JwkSet, Algorithm};
-use reqwest::Url;
+use reqwest::{Client, Url};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -51,6 +51,7 @@ impl Default for Refresh {
 
 #[derive(Clone)]
 pub struct KeyStoreManager {
+    http_client: Client,
     key_url: Url,
     /// in case of fail loading (error or key not found), minimal interval
     refresh: Refresh,
@@ -67,8 +68,9 @@ pub struct KeyStore {
 }
 
 impl KeyStoreManager {
-    pub(crate) fn new(key_url: Url, refresh: Refresh) -> KeyStoreManager {
+    pub(crate) fn new(http_client: Client, key_url: Url, refresh: Refresh) -> KeyStoreManager {
         KeyStoreManager {
+            http_client,
             key_url,
             refresh,
             keystore: Arc::new(Mutex::new(KeyStore {
@@ -85,7 +87,7 @@ impl KeyStoreManager {
         let key = match self.refresh.strategy {
             RefreshStrategy::Interval => {
                 if ks_gard.can_refresh(self.refresh.refresh_interval, self.refresh.retry_interval) {
-                    ks_gard.refresh(&self.key_url, &[]).await?;
+                    ks_gard.refresh(&self.http_client, &self.key_url, &[]).await?;
                 }
                 ks_gard.get_key(header)?
             }
@@ -95,7 +97,7 @@ impl KeyStoreManager {
                     if let Some(jwk) = jwk_opt {
                         jwk
                     } else if ks_gard.can_refresh(self.refresh.refresh_interval, self.refresh.retry_interval) {
-                        ks_gard.refresh(&self.key_url, &[("kid", kid)]).await?;
+                        ks_gard.refresh(&self.http_client, &self.key_url, &[("kid", kid)]).await?;
                         ks_gard.find_kid(kid).ok_or_else(|| AuthError::InvalidKid(kid.to_owned()))?
                     } else {
                         return Err(AuthError::InvalidKid(kid.to_owned()));
@@ -107,6 +109,7 @@ impl KeyStoreManager {
                     } else if ks_gard.can_refresh(self.refresh.refresh_interval, self.refresh.retry_interval) {
                         ks_gard
                             .refresh(
+                                &self.http_client,
                                 &self.key_url,
                                 &[(
                                     "alg",
@@ -127,7 +130,7 @@ impl KeyStoreManager {
                     // if jwks endpoint is down for the loading, respect retry_interval
                     && ks_gard.can_refresh(self.refresh.refresh_interval, self.refresh.retry_interval)
                 {
-                    ks_gard.refresh(&self.key_url, &[]).await?;
+                    ks_gard.refresh(&self.http_client, &self.key_url, &[]).await?;
                 }
                 ks_gard.get_key(header)?
             }
@@ -151,8 +154,8 @@ impl KeyStore {
         }
     }
 
-    async fn refresh(&mut self, key_url: &Url, qparam: &[(&str, &str)]) -> Result<(), AuthError> {
-        reqwest::Client::new()
+    async fn refresh(&mut self, http_client: &Client, key_url: &Url, qparam: &[(&str, &str)]) -> Result<(), AuthError> {
+        http_client
             .get(key_url.as_ref())
             .query(qparam)
             .send()
@@ -221,7 +224,7 @@ mod tests {
 
     use jsonwebtoken::Algorithm;
     use jsonwebtoken::{jwk::Jwk, Header};
-    use reqwest::Url;
+    use reqwest::{Client, Url};
     use wiremock::{
         matchers::{method, path},
         Mock, MockServer, ResponseTemplate,
@@ -371,6 +374,7 @@ mod tests {
         mock_jwks_response_once(&mock_server, JWK_ED01).await;
 
         let ksm = KeyStoreManager::new(
+            Client::default(),
             Url::parse(&mock_server.uri()).unwrap(),
             Refresh {
                 strategy: RefreshStrategy::Interval,
@@ -418,6 +422,7 @@ mod tests {
         mock_jwks_response_once(&mock_server, JWK_ED01).await;
 
         let ksm = KeyStoreManager::new(
+            Client::default(),
             Url::parse(&mock_server.uri()).unwrap(),
             Refresh {
                 strategy: RefreshStrategy::KeyNotFound,
@@ -477,6 +482,7 @@ mod tests {
         mock_jwks_response_once(&mock_server, JWK_ED01).await;
 
         let ksm = KeyStoreManager::new(
+            Client::default(),
             Url::parse(&mock_server.uri()).unwrap(),
             Refresh {
                 strategy: RefreshStrategy::NoRefresh,
