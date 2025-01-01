@@ -114,9 +114,7 @@ impl KeyStoreManager {
                                 )],
                             )
                             .await?;
-                        ks_gard
-                            .find_alg(&header.alg)
-                            .ok_or_else(|| AuthError::InvalidKeyAlg(header.alg))?
+                        ks_gard.find_alg(&header.alg).ok_or(AuthError::InvalidKeyAlg(header.alg))?
                     } else {
                         return Err(AuthError::InvalidKeyAlg(header.alg));
                     }
