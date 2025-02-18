@@ -10,7 +10,7 @@ repository = "https://github.com/cduvray/jwt-authorizer"
 keywords = ["jwt", "axum", "authorisation", "jwks"]
 
 [dependencies]
-axum = { version = "0.7" }
+axum = { version = "0.8" }
 chrono = { version = "0.4", optional = true }
 futures-util = "0.3"
 futures-core = "0.3"
@@ -30,6 +30,7 @@ tracing = "0.1"
 tonic = { version = "0.12", optional = true }
 time = { version = "0.3", optional = true }
 http-body-util = "0.1.1"
+aide = { version = "0.14", optional = true }
 
 [dev-dependencies]
 hyper = { version = "1.3.1", features = ["full"] }
@@ -51,6 +52,7 @@ rustls-tls-webpki-roots = ["reqwest/rustls-tls-webpki-roots"]
 rustls-tls-native-roots = ["reqwest/rustls-tls-native-roots"]
 time = ["dep:time"]
 chrono = ["dep:chrono"]
+aide = ["dep:aide"]
 
 [[test]]
 name = "tonic"
