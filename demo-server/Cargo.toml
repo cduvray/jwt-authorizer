@@ -6,18 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.83"
-axum = { version = "0.7.5" }
-headers = "0.4"
-josekit = "0.8.6"
+anyhow = "1.0.95"
+axum = { version = "0.8.1" }
+headers = "0.4.0"
+josekit = "0.10.1"
 jsonwebtoken = "9.3.0"
-once_cell = "1.19.0"
-reqwest = { version = "0.12.4", features = ["json"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0.60"
-tokio = { version = "1.37.0", features = ["full"] }
-tower-http = { version = "0.5.2", features = ["trace"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+once_cell = "1.20.2"
+reqwest = { version = "0.12.12", features = ["json"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.134"
+thiserror = "2.0.9"
+tokio = { version = "1.42.0", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["trace"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 jwt-authorizer = { path = "../jwt-authorizer" }

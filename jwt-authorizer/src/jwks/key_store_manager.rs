@@ -30,9 +30,9 @@ pub struct Refresh {
     /// After the refresh interval the store will/can be refreshed.
     ///
     /// - RefreshStrategy::KeyNotFound - refresh will be performed only if a kid is not found in the store
-    ///      (if no kid is in the token header the alg is looked up)
+    ///   (if no kid is in the token header the alg is looked up)
     /// - RefreshStrategy::Interval - refresh will be performed each time the refresh interval has elapsed
-    ///      (before checking a new token -> lazy behaviour)
+    ///   (before checking a new token -> lazy behaviour)
     pub refresh_interval: Duration,
     /// don't refresh before (after an error or jwks is unawailable)
     /// (we let a little bit of time to the jwks endpoint to recover)
@@ -114,9 +114,7 @@ impl KeyStoreManager {
                                 )],
                             )
                             .await?;
-                        ks_gard
-                            .find_alg(&header.alg)
-                            .ok_or_else(|| AuthError::InvalidKeyAlg(header.alg))?
+                        ks_gard.find_alg(&header.alg).ok_or(AuthError::InvalidKeyAlg(header.alg))?
                     } else {
                         return Err(AuthError::InvalidKeyAlg(header.alg));
                     }

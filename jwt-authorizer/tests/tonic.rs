@@ -1,12 +1,11 @@
 use std::{sync::Once, task::Poll};
 
-use axum::extract::Request;
 use futures_core::future::BoxFuture;
 use http::header::AUTHORIZATION;
 use jwt_authorizer::{layer::AuthorizationService, IntoLayer, JwtAuthorizer, Validation};
 use serde::{Deserialize, Serialize};
 use tonic::{server::NamedService, server::UnaryService, IntoRequest, Status};
-use tower::{buffer::Buffer, Service};
+use tower::Service;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -50,8 +49,8 @@ struct GreeterServer {
     expected_sub: String,
 }
 
-impl Service<http::Request<tonic::body::BoxBody>> for GreeterServer {
-    type Response = http::Response<tonic::body::BoxBody>;
+impl Service<http::Request<tonic::body::Body>> for GreeterServer {
+    type Response = http::Response<tonic::body::Body>;
     type Error = std::convert::Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -59,7 +58,7 @@ impl Service<http::Request<tonic::body::BoxBody>> for GreeterServer {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
+    fn call(&mut self, req: http::Request<tonic::body::Body>) -> Self::Future {
         let token = req.extensions().get::<jsonwebtoken::TokenData<User>>().unwrap();
         assert_eq!(token.claims.sub, self.expected_sub);
         match req.uri().path() {
@@ -79,16 +78,11 @@ impl NamedService for GreeterServer {
     const NAME: &'static str = "hello";
 }
 
-async fn app(
-    jwt_auth: JwtAuthorizer<User>,
-    expected_sub: String,
-) -> AuthorizationService<Buffer<tonic::service::Routes, Request<tonic::body::BoxBody>>, User> {
+async fn app(jwt_auth: JwtAuthorizer<User>, expected_sub: String) -> AuthorizationService<tonic::service::Routes, User> {
     let layer = jwt_auth.build().await.unwrap().into_layer();
-    tonic::transport::Server::builder()
-        .layer(layer)
-        .layer(tower::buffer::BufferLayer::new(1))
-        .add_service(GreeterServer { expected_sub })
-        .into_service()
+    let routes = tonic::service::Routes::new(GreeterServer { expected_sub }).prepare();
+
+    tower::ServiceBuilder::new().layer(layer).service(routes)
 }
 
 fn init_test() {
@@ -109,9 +103,9 @@ async fn make_protected_request<S>(
 ) -> Result<tonic::Response<HelloMessage>, Status>
 where
     S: Service<
-            http::Request<tonic::body::BoxBody>,
-            Response = http::Response<tonic::body::BoxBody>,
-            Error = tower::BoxError,
+            http::Request<tonic::body::Body>,
+            Response = http::Response<tonic::body::Body>,
+            Error = std::convert::Infallible,
         > + Send
         + Clone
         + 'static,

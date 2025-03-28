@@ -85,7 +85,7 @@ fn response_500() -> Response<Body> {
 }
 
 #[cfg(feature = "tonic")]
-impl From<AuthError> for Response<tonic::body::BoxBody> {
+impl From<AuthError> for Response<tonic::body::Body> {
     fn from(e: AuthError) -> Self {
         match e {
             AuthError::JwksRefreshError(err) => {
