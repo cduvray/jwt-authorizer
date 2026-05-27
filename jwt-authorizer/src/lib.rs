@@ -1,6 +1,6 @@
 #![doc = include_str!("../docs/README.md")]
 
-use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use axum::{extract::FromRequestParts, http::request::Parts};
 use jsonwebtoken::TokenData;
 use serde::de::DeserializeOwned;
 
@@ -24,7 +24,6 @@ pub mod validation;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct JwtClaims<T>(pub T);
 
-#[async_trait]
 impl<T, S> FromRequestParts<S> for JwtClaims<T>
 where
     T: DeserializeOwned + Send + Sync + Clone + 'static,

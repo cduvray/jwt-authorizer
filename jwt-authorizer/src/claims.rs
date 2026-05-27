@@ -3,8 +3,27 @@ use serde::{Deserialize, Serialize};
 /// The number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time ignoring leap seconds.
 /// (<https://www.rfc-editor.org/rfc/rfc7519#section-2>)
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
-pub struct NumericDate(pub i64);
+pub struct NumericDate(#[serde(deserialize_with = "deserialize_numeric_date")] pub i64);
 
+#[allow(dead_code)]
+fn deserialize_numeric_date<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NumericDateHelper {
+        Int(i64),
+        Float(f64),
+    }
+
+    match NumericDateHelper::deserialize(deserializer)? {
+        NumericDateHelper::Int(i) => Ok(i),
+        NumericDateHelper::Float(f) => Ok(f as i64),
+    }
+}
 /// accesses the underlying value
 impl From<NumericDate> for i64 {
     fn from(t: NumericDate) -> Self {

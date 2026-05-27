@@ -17,6 +17,14 @@ pub struct Validation {
     ///
     /// Defaults to `false`.
     pub validate_nbf: bool,
+    /// Whether to validate the `aud` field at all.
+    ///
+    /// Defaults to `true`. When `true` and the token carries an `aud` claim,
+    /// `aud` must be set (otherwise jsonwebtoken rejects with `InvalidAudience`
+    /// per RFC 7519). Set to `false` to trust any audience — useful when the
+    /// issuer is the only thing you care about and you don't want to track an
+    /// allowlist of client IDs.
+    pub validate_aud: bool,
     /// If it contains a value, the validation will check that the `aud` claim value is in the values provided.
     ///
     /// Defaults to `None`.
@@ -71,6 +79,14 @@ impl Validation {
         self
     }
 
+    /// enables or disables aud validation entirely. When disabled, the `aud`
+    /// claim is not checked even if present.
+    pub fn validate_aud(mut self, val: bool) -> Self {
+        self.validate_aud = val;
+
+        self
+    }
+
     /// Add some leeway (in seconds) to the `exp` and `nbf` validation to
     /// account for clock skew.
     pub fn leeway(mut self, value: u64) -> Self {
@@ -115,6 +131,7 @@ impl Validation {
         jwt_validation.leeway = self.leeway;
         jwt_validation.validate_exp = self.validate_exp;
         jwt_validation.validate_nbf = self.validate_nbf;
+        jwt_validation.validate_aud = self.validate_aud;
         jwt_validation.iss = iss;
         jwt_validation.aud = aud;
         jwt_validation.sub = None;
@@ -138,6 +155,7 @@ impl Default for Validation {
 
             validate_exp: true,
             validate_nbf: false,
+            validate_aud: true,
 
             iss: None,
             aud: None,
