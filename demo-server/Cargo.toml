@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.83"
-axum = { version = "0.7.5" }
+axum = { version = "0.8.1" }
 headers = "0.4"
 josekit = "0.8.6"
 jsonwebtoken = "9.3.0"

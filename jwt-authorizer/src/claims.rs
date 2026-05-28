@@ -3,8 +3,26 @@ use serde::{Deserialize, Serialize};
 /// The number of seconds from 1970-01-01T00:00:00Z UTC until the specified UTC date/time ignoring leap seconds.
 /// (<https://www.rfc-editor.org/rfc/rfc7519#section-2>)
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
-pub struct NumericDate(pub i64);
+pub struct NumericDate(#[serde(deserialize_with = "deserialize_numeric_date")] pub i64);
 
+// Some issuers emit `exp` / `nbf` / `iat` as floating point (e.g. 1.516240122e9).
+// RFC 7519 §2 allows any JSON numeric value, so accept both ints and floats here.
+fn deserialize_numeric_date<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NumericDateHelper {
+        Int(i64),
+        Float(f64),
+    }
+
+    match NumericDateHelper::deserialize(deserializer)? {
+        NumericDateHelper::Int(i) => Ok(i),
+        NumericDateHelper::Float(f) => Ok(f as i64),
+    }
+}
 /// accesses the underlying value
 impl From<NumericDate> for i64 {
     fn from(t: NumericDate) -> Self {
@@ -116,6 +134,18 @@ mod tests {
     fn from_numeric_date() {
         let exp: i64 = NumericDate(1516239022).into();
         assert_eq!(exp, 1516239022);
+    }
+
+    #[test]
+    fn numeric_date_accepts_int_and_float() {
+        let from_int: NumericDate = serde_json::from_str("1516239022").unwrap();
+        assert_eq!(from_int, NumericDate(1516239022));
+
+        let from_float: NumericDate = serde_json::from_str("1516239022.5").unwrap();
+        assert_eq!(from_float, NumericDate(1516239022));
+
+        let from_exp: NumericDate = serde_json::from_str("1.516239022e9").unwrap();
+        assert_eq!(from_exp, NumericDate(1516239022));
     }
 
     #[test]

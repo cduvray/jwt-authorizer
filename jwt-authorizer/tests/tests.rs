@@ -312,6 +312,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn validate_aud_disabled() {
+        // Default: a token with an `aud` claim but no allowlist configured is rejected.
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new()),
+            common::JWT_EC1_AUD1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // validate_aud(false): the same token is accepted, even with a bad allowlist.
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
+                .validation(Validation::new().validate_aud(false).aud(&["bad-aud"])),
+            common::JWT_EC1_AUD1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn validate_exp() {
         // DEFAULT -> ENABLED
         let response = make_proteced_request(

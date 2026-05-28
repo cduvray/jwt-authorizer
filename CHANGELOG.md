@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- update to axum 0.8
+- `NumericDate` now deserializes from floating-point JSON numbers in addition to integers (RFC 7519 §2)
+- `Validation::validate_aud(bool)` to disable `aud` validation entirely
+
 ## 0.15.0 (2024-08-26)
 
 - tonic support is back
