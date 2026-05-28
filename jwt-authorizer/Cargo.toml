@@ -23,7 +23,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.37", features = ["full"] }
-tower-http = { version = "0.5", features = ["trace", "auth"] }
+tower-http = { version = "0.6", features = ["trace", "auth"] }
 tower-layer = "0.3"
 tower-service = "0.3"
 tracing = "0.1"
