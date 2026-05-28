@@ -225,21 +225,21 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    // #[tokio::test]
-    // async fn extract_from_public_optional() {
-    //     let app = Router::new().route(
-    //         "/public",
-    //         get(|user: Option<JwtClaims<User>>| async move { format!("option: {}", user.is_none()) }),
-    //     );
-    //     let response = app
-    //         .oneshot(Request::builder().uri("/public").body(Body::empty()).unwrap())
-    //         .await
-    //         .unwrap();
-    //
-    //     assert_eq!(response.status(), StatusCode::OK);
-    //     let body = response.into_body().collect().await.unwrap().to_bytes();
-    //     assert_eq!(&body[..], b"option: true");
-    // }
+    #[tokio::test]
+    async fn extract_from_public_optional() {
+        let app = Router::new().route(
+            "/public",
+            get(|user: Option<JwtClaims<User>>| async move { format!("option: {}", user.is_none()) }),
+        );
+        let response = app
+            .oneshot(Request::builder().uri("/public").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"option: true");
+    }
 
     // --------------------
     //      VALIDATION
@@ -305,6 +305,26 @@ mod tests {
 
         let response = make_proteced_request(
             JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new().aud(&["aud1"])),
+            common::JWT_EC1_AUD1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn validate_aud_disabled() {
+        // Default: a token with an `aud` claim but no allowlist configured is rejected.
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem").validation(Validation::new()),
+            common::JWT_EC1_AUD1_OK,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // validate_aud(false): the same token is accepted, even with a bad allowlist.
+        let response = make_proteced_request(
+            JwtAuthorizer::from_ec_pem("../config/ecdsa-public1.pem")
+                .validation(Validation::new().validate_aud(false).aud(&["bad-aud"])),
             common::JWT_EC1_AUD1_OK,
         )
         .await;

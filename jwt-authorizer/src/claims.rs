@@ -5,13 +5,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct NumericDate(#[serde(deserialize_with = "deserialize_numeric_date")] pub i64);
 
-#[allow(dead_code)]
+// Some issuers emit `exp` / `nbf` / `iat` as floating point (e.g. 1.516240122e9).
+// RFC 7519 §2 allows any JSON numeric value, so accept both ints and floats here.
 fn deserialize_numeric_date<'de, D>(deserializer: D) -> Result<i64, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    use serde::de::Error;
-
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum NumericDateHelper {
@@ -135,6 +134,18 @@ mod tests {
     fn from_numeric_date() {
         let exp: i64 = NumericDate(1516239022).into();
         assert_eq!(exp, 1516239022);
+    }
+
+    #[test]
+    fn numeric_date_accepts_int_and_float() {
+        let from_int: NumericDate = serde_json::from_str("1516239022").unwrap();
+        assert_eq!(from_int, NumericDate(1516239022));
+
+        let from_float: NumericDate = serde_json::from_str("1516239022.5").unwrap();
+        assert_eq!(from_float, NumericDate(1516239022));
+
+        let from_exp: NumericDate = serde_json::from_str("1.516239022e9").unwrap();
+        assert_eq!(from_exp, NumericDate(1516239022));
     }
 
     #[test]
